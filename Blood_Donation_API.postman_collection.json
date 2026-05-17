@@ -1,0 +1,417 @@
+{
+  "info": {
+    "name": "Blood Donation API",
+    "description": "Smart AI Blood Donation System API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Donor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"donor@test.com\",\n  \"password\": \"test123\",\n  \"full_name\": \"John Doe\",\n  \"phone\": \"01234567890\",\n  \"role\": \"donor\",\n  \"city\": \"Dhaka\",\n  \"blood_group\": \"O-\",\n  \"location_lat\": 23.8103,\n  \"location_lng\": 90.4125\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/auth/register",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Register Hospital",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"hospital@test.com\",\n  \"password\": \"hospital123\",\n  \"full_name\": \"Dhaka Medical Hospital\",\n  \"phone\": \"01234567891\",\n  \"role\": \"hospital\",\n  \"city\": \"Dhaka\",\n  \"location_lat\": 23.8103,\n  \"location_lng\": 90.4125\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/auth/register",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"donor@test.com\",\n  \"password\": \"test123\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/auth/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Blood Requests",
+      "item": [
+        {
+          "name": "Create Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requester_id\": \"paste-user-id-here\",\n  \"blood_group\": \"O-\",\n  \"units_needed\": 2,\n  \"hospital_name\": \"Dhaka Medical Hospital\",\n  \"location_lat\": 23.8103,\n  \"location_lng\": 90.4125,\n  \"city\": \"Dhaka\",\n  \"patient_condition\": \"Surgery\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/requests",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "requests"]
+            }
+          }
+        },
+        {
+          "name": "Get All Requests",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:5000/api/requests",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "requests"]
+            }
+          }
+        },
+        {
+          "name": "Get Requests by City",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:5000/api/requests?city=Dhaka",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "requests"],
+              "query": [
+                {
+                  "key": "city",
+                  "value": "Dhaka"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Requests by Blood Group",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:5000/api/requests?blood_group=O-",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "requests"],
+              "query": [
+                {
+                  "key": "blood_group",
+                  "value": "O-"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Single Request",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:5000/api/requests/paste-request-id",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "requests", "paste-request-id"]
+            }
+          }
+        },
+        {
+          "name": "Update Request Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"fulfilled\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/requests/paste-request-id/status",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "requests", "paste-request-id", "status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI Features",
+      "item": [
+        {
+          "name": "Match Donors",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"blood_group\": \"O-\",\n  \"location_lat\": 23.8103,\n  \"location_lng\": 90.4125,\n  \"city\": \"Dhaka\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/ai/match",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "ai", "match"]
+            }
+          }
+        },
+        {
+          "name": "Blood Shortage Prediction",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:5000/api/ai/predict",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "ai", "predict"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Emergency",
+      "item": [
+        {
+          "name": "Create Emergency Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"blood_group\": \"AB+\",\n  \"hospital_name\": \"Emergency Hospital\",\n  \"location_lat\": 23.8103,\n  \"location_lng\": 90.4125,\n  \"city\": \"Dhaka\",\n  \"contact_phone\": \"01234567890\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/emergency",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "emergency"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "Get Hospital Inventory",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:5000/api/inventory/paste-hospital-id",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "inventory", "paste-hospital-id"]
+            }
+          }
+        },
+        {
+          "name": "Update Inventory",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hospital_id\": \"paste-hospital-id\",\n  \"blood_group\": \"O-\",\n  \"units_available\": 15\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/inventory/update",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "inventory", "update"]
+            }
+          }
+        },
+        {
+          "name": "Bulk Update Inventory",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hospital_id\": \"paste-hospital-id\",\n  \"inventory_items\": [\n    {\"blood_group\": \"O+\", \"units_available\": 20},\n    {\"blood_group\": \"O-\", \"units_available\": 15},\n    {\"blood_group\": \"A+\", \"units_available\": 12},\n    {\"blood_group\": \"B+\", \"units_available\": 10},\n    {\"blood_group\": \"AB+\", \"units_available\": 8},\n    {\"blood_group\": \"AB-\", \"units_available\": 5}\n  ]\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/inventory/bulk-update",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "inventory", "bulk-update"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Get Analytics",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:5000/api/admin/analytics",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "admin", "analytics"]
+            }
+          }
+        },
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:5000/api/admin/users",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "admin", "users"]
+            }
+          }
+        },
+        {
+          "name": "Get Donors",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:5000/api/admin/users?role=donor",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "admin", "users"],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "donor"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update User Role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/admin/users/paste-user-id/role",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "admin", "users", "paste-user-id", "role"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:5000/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5000",
+          "path": ["health"]
+        }
+      }
+    }
+  ]
+}
