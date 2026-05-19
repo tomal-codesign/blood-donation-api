@@ -1,4 +1,4 @@
-// api/auth/register/index.js - No email verification
+// api/auth/register/index.js - Fixed for RLS
 const express = require("express");
 const router = express.Router();
 const supabase = require("../../../supabase");
@@ -96,8 +96,7 @@ router.post("/register", async (req, res) => {
     if (!validateEmail(email)) {
       return res.status(400).json({
         error: "Invalid email format",
-        details:
-          "Please provide a valid email address (e.g., user@example.com)",
+        details: "Please provide a valid email address (e.g., user@example.com)",
       });
     }
 
@@ -167,8 +166,7 @@ router.post("/register", async (req, res) => {
       if (!validateBloodGroup(blood_group)) {
         return res.status(400).json({
           error: "Invalid blood group",
-          details:
-            "Blood group must be one of: A+, A-, B+, B-, AB+, AB-, O+, O-",
+          details: "Blood group must be one of: A+, A-, B+, B-, AB+, AB-, O+, O-",
         });
       }
     }
@@ -195,19 +193,18 @@ router.post("/register", async (req, res) => {
     if (existingUser) {
       return res.status(400).json({
         error: "User already exists",
-        details:
-          "An account with this email already exists. Please login instead.",
+        details: "An account with this email already exists. Please login instead.",
       });
     }
 
     // ============================================
-    // 10. CREATE USER WITH ADMIN API (No email verification)
+    // 10. CREATE USER WITH ADMIN API
     // ============================================
     const { data: authData, error: authError } =
       await supabase.auth.admin.createUser({
         email,
         password,
-        email_confirm: true, // This auto-confirms email, no verification needed
+        email_confirm: true,
         user_metadata: {
           full_name,
           phone,
@@ -243,10 +240,11 @@ router.post("/register", async (req, res) => {
     console.log("User created:", authData.user.id);
 
     // ============================================
-    // 11. INSERT INTO PROFILES TABLE
+    // 11. INSERT INTO PROFILES TABLE (with email)
     // ============================================
     const { error: profileError } = await supabase.from("profiles").insert({
       id: authData.user.id,
+      email: email,  // Added email field
       full_name,
       phone,
       role,
@@ -289,7 +287,7 @@ router.post("/register", async (req, res) => {
     }
 
     // ============================================
-    // 13. SUCCESS RESPONSE (No email verification needed)
+    // 13. SUCCESS RESPONSE
     // ============================================
     res.status(201).json({
       success: true,

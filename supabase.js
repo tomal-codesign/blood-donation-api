@@ -1,17 +1,20 @@
-require('dotenv').config();
+// supabase.js - Make sure you're using SERVICE_KEY
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY; // This is important!
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('❌ ERROR: SUPABASE_URL or SUPABASE_SERVICE_KEY not set in .env');
-  console.error('Current values:');
-  console.error('  SUPABASE_URL:', supabaseUrl ? '✅ Set' : '❌ Missing');
-  console.error('  SUPABASE_SERVICE_KEY:', supabaseServiceKey ? '✅ Set' : '❌ Missing');
+  console.error('Missing Supabase credentials');
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// Create admin client with service role key (bypasses RLS)
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
 
 module.exports = supabase;
