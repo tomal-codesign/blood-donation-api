@@ -1,122 +1,283 @@
-// api/auth/register/index.js
+// api/auth/register/index.js - Complete with validation
 const express = require('express');
 const router = express.Router();
 const supabase = require('../../../supabase');
 
+// Validation functions
+const validateEmail = (email) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
+const validatePassword = (password) => {
+  const minLength = 6;
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  
+  if (password.length < minLength) {
+    return { valid: false, message: `Password must be at least ${minLength} characters` };
+  }
+  if (!hasUpperCase) {
+    return { valid: false, message: 'Password must contain at least one uppercase letter' };
+  }
+  if (!hasLowerCase) {
+    return { valid: false, message: 'Password must contain at least one lowercase letter' };
+  }
+  if (!hasNumbers) {
+    return { valid: false, message: 'Password must contain at least one number' };
+  }
+  return { valid: true, message: '' };
+};
+
+const validatePhone = (phone) => {
+  const phoneRegex = /^[0-9+\-\s()]{8,20}$/;
+  return phoneRegex.test(phone);
+};
+
+const validateBloodGroup = (bloodGroup) => {
+  const validGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+  return validGroups.includes(bloodGroup);
+};
+
+const validateCity = (city) => {
+  const validCities = ['Dhaka', 'Chittagong', 'Khulna', 'Rajshahi', 'Sylhet', 'Barishal', 'Rangpur', 'Mymensingh'];
+  return validCities.includes(city);
+};
+
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, full_name, phone, role, city, blood_group, location_lat, location_lng } = req.body;
+    const { email, password, full_name, phone, role, city, blood_group } = req.body;
 
-    // Validate required fields
-    const missingFields = [];
-    if (!email) missingFields.push('email');
-    if (!password) missingFields.push('password');
-    if (!full_name) missingFields.push('full_name');
-    if (!phone) missingFields.push('phone');
-    if (!role) missingFields.push('role');
+    // ============================================
+    // 1. REQUIRED FIELDS VALIDATION
+    // ============================================
+    const errors = [];
     
-    if (missingFields.length > 0) {
+    if (!email) errors.push('Email is required');
+    if (!password) errors.push('Password is required');
+    if (!full_name) errors.push('Full name is required');
+    if (!phone) errors.push('Phone number is required');
+    if (!role) errors.push('Role is required');
+    if (!city) errors.push('City is required');
+    
+    if (errors.length > 0) {
       return res.status(400).json({ 
         error: 'Missing required fields', 
-        missing: missingFields 
+        details: errors 
       });
     }
 
-    // Validate role
+    // ============================================
+    // 2. EMAIL VALIDATION
+    // ============================================
+    if (!validateEmail(email)) {
+      return res.status(400).json({ 
+        error: 'Invalid email format',
+        details: 'Please provide a valid email address (e.g., user@example.com)'
+      });
+    }
+
+    // ============================================
+    // 3. PASSWORD VALIDATION
+    // ============================================
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ 
+        error: 'Password requirements not met',
+        details: passwordValidation.message
+      });
+    }
+
+    // ============================================
+    // 4. PHONE VALIDATION
+    // ============================================
+    if (!validatePhone(phone)) {
+      return res.status(400).json({ 
+        error: 'Invalid phone number',
+        details: 'Phone number must be 8-20 digits (e.g., 01712345678)'
+      });
+    }
+
+    // ============================================
+    // 5. ROLE VALIDATION
+    // ============================================
     const validRoles = ['donor', 'patient', 'hospital', 'admin'];
     if (!validRoles.includes(role)) {
-      return res.status(400).json({ error: 'Invalid role. Must be donor, patient, hospital, or admin' });
+      return res.status(400).json({ 
+        error: 'Invalid role',
+        details: `Role must be one of: ${validRoles.join(', ')}`
+      });
     }
 
-    // For donor, blood_group is required
-    if (role === 'donor' && !blood_group) {
-      return res.status(400).json({ error: 'Blood group is required for donors' });
+    // ============================================
+    // 6. CITY VALIDATION
+    // ============================================
+    if (!validateCity(city)) {
+      const validCities = ['Dhaka', 'Chittagong', 'Khulna', 'Rajshahi', 'Sylhet', 'Barishal', 'Rangpur', 'Mymensingh'];
+      return res.status(400).json({ 
+        error: 'Invalid city',
+        details: `City must be one of: ${validCities.join(', ')}`
+      });
     }
 
-    // Check if user already exists
-    const { data: existingUser } = await supabase
+    // ============================================
+    // 7. BLOOD GROUP VALIDATION (for donors)
+    // ============================================
+    if (role === 'donor') {
+      if (!blood_group) {
+        return res.status(400).json({ 
+          error: 'Blood group required',
+          details: 'Blood group is required for donors'
+        });
+      }
+      
+      if (!validateBloodGroup(blood_group)) {
+        return res.status(400).json({ 
+          error: 'Invalid blood group',
+          details: 'Blood group must be one of: A+, A-, B+, B-, AB+, AB-, O+, O-'
+        });
+      }
+    }
+
+    // ============================================
+    // 8. NAME VALIDATION
+    // ============================================
+    if (full_name.length < 2 || full_name.length > 100) {
+      return res.status(400).json({ 
+        error: 'Invalid name length',
+        details: 'Full name must be between 2 and 100 characters'
+      });
+    }
+
+    // ============================================
+    // 9. CHECK IF USER ALREADY EXISTS
+    // ============================================
+    const { data: existingUsers } = await supabase
       .from('profiles')
       .select('id')
-      .eq('id', email) // This won't work correctly, need better check
+      .eq('email', email)
       .maybeSingle();
 
-    // Create auth user in Supabase with user_metadata
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    if (existingUsers) {
+      return res.status(400).json({ 
+        error: 'User already exists',
+        details: 'An account with this email already exists. Please login instead.'
+      });
+    }
+
+    // ============================================
+    // 10. CREATE USER
+    // ============================================
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
-      email_confirm: true,
-      user_metadata: {
-        full_name,
-        phone,
-        role,
-        city
+      options: {
+        data: {
+          full_name,
+          phone,
+          role,
+          city,
+          blood_group: blood_group || null
+        }
       }
     });
 
     if (authError) {
       console.error('Auth error:', authError);
-      return res.status(400).json({ error: authError.message });
-    }
-
-    if (!authData || !authData.user) {
-      return res.status(500).json({ error: 'Failed to create user' });
-    }
-
-    // Insert into profiles table with proper error handling
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        id: authData.user.id,
-        full_name,
-        phone,
-        role,
-        city,
-        location_lat: location_lat || null,
-        location_lng: location_lng || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
-
-    if (profileError) {
-      console.error('Profile insert error:', profileError);
-      // Rollback - delete the auth user if profile creation fails
-      await supabase.auth.admin.deleteUser(authData.user.id);
-      return res.status(400).json({ 
-        error: 'Failed to create profile', 
-        details: profileError.message 
-      });
-    }
-
-    // If donor, insert into donors table
-    if (role === 'donor' && blood_group) {
-      const { error: donorError } = await supabase
-        .from('donors')
-        .insert({
-          id: authData.user.id,
-          blood_group,
-          is_available: true,
-          last_donation_date: null,
-          total_donations: 0,
-          created_at: new Date().toISOString()
+      
+      // Handle specific auth errors
+      if (authError.message.includes('already registered')) {
+        return res.status(400).json({ 
+          error: 'Email already registered',
+          details: 'This email is already registered. Please login.'
         });
+      }
+      
+      return res.status(400).json({ 
+        error: 'Registration failed',
+        details: authError.message
+      });
+    }
 
-      if (donorError) {
-        console.error('Donor insert error:', donorError);
-        // Don't rollback profile, but log error
-        // The user can still login, just missing donor info
+    if (!authData.user) {
+      return res.status(500).json({ 
+        error: 'Registration failed',
+        details: 'Unable to create user account. Please try again.'
+      });
+    }
+
+    // ============================================
+    // 11. WAIT FOR TRIGGER (profile creation)
+    // ============================================
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // ============================================
+    // 12. VERIFY PROFILE WAS CREATED
+    // ============================================
+    const { data: profile, error: profileCheckError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', authData.user.id)
+      .maybeSingle();
+
+    if (profileCheckError || !profile) {
+      console.error('Profile verification failed:', profileCheckError);
+      // Try to create profile manually
+      const { error: manualProfileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: authData.user.id,
+          full_name,
+          phone,
+          role,
+          city
+        }, { onConflict: 'id' });
+      
+      if (manualProfileError) {
+        console.error('Manual profile creation failed:', manualProfileError);
       }
     }
 
+    // ============================================
+    // 13. CREATE DONOR RECORD (if donor)
+    // ============================================
+    if (role === 'donor' && blood_group) {
+      const { error: donorError } = await supabase
+        .from('donors')
+        .upsert({
+          id: authData.user.id,
+          blood_group,
+          is_available: true,
+          total_donations: 0,
+          last_donation_date: null
+        }, { onConflict: 'id' });
+
+      if (donorError) {
+        console.error('Donor creation error:', donorError);
+        // Don't fail registration, just log error
+      }
+    }
+
+    // ============================================
+    // 14. SUCCESS RESPONSE
+    // ============================================
     res.status(201).json({
-      message: 'Registered successfully',
+      success: true,
+      message: 'Registration successful!',
+      details: 'Please check your email to confirm your account.',
       userId: authData.user.id,
       email: authData.user.email,
       role: role,
       redirectTo: '/login'
     });
+
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: 'Something went wrong. Please try again later.'
+    });
   }
 });
 
