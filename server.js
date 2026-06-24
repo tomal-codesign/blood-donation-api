@@ -144,6 +144,9 @@ app.use("/api/admin", require("./api/admin"));
 // Doner routes
 app.use("/api/donors", require("./api/donors"));
 
+// Hospitals
+app.use("/api/hospitals", require("./api/hospitals"));
+
 // ============================================
 // 404 HANDLER
 // ============================================
