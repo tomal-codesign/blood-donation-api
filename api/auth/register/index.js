@@ -1,4 +1,4 @@
-// api/auth/register/index.js - Fixed for RLS
+// api/auth/register/index.js
 const express = require("express");
 const router = express.Router();
 const supabase = require("../../../supabase");
@@ -54,22 +54,15 @@ const validateBloodGroup = (bloodGroup) => {
 
 const validateCity = (city) => {
   const validCities = [
-    "Dhaka",
-    "Chittagong",
-    "Khulna",
-    "Rajshahi",
-    "Sylhet",
-    "Barishal",
-    "Rangpur",
-    "Mymensingh",
+    "Dhaka", "Chittagong", "Khulna", "Rajshahi", 
+    "Sylhet", "Barishal", "Rangpur", "Mymensingh"
   ];
   return validCities.includes(city);
 };
 
 router.post("/register", async (req, res) => {
   try {
-    const { email, password, full_name, phone, role, city, blood_group } =
-      req.body;
+    const { email, password, full_name, phone, role, city, blood_group } = req.body;
 
     // ============================================
     // 1. REQUIRED FIELDS VALIDATION
@@ -136,16 +129,6 @@ router.post("/register", async (req, res) => {
     // 6. CITY VALIDATION
     // ============================================
     if (!validateCity(city)) {
-      const validCities = [
-        "Dhaka",
-        "Chittagong",
-        "Khulna",
-        "Rajshahi",
-        "Sylhet",
-        "Barishal",
-        "Rangpur",
-        "Mymensingh",
-      ];
       return res.status(400).json({
         error: "Invalid city",
         details: `City must be one of: ${validCities.join(", ")}`,
@@ -200,19 +183,18 @@ router.post("/register", async (req, res) => {
     // ============================================
     // 10. CREATE USER WITH ADMIN API
     // ============================================
-    const { data: authData, error: authError } =
-      await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: {
-          full_name,
-          phone,
-          role,
-          city,
-          blood_group: blood_group || null,
-        },
-      });
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name,
+        phone,
+        role,
+        city,
+        blood_group: blood_group || null,
+      },
+    });
 
     if (authError) {
       console.error("Auth error:", authError);
@@ -237,14 +219,14 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    console.log("User created:", authData.user.id);
+    console.log("✅ User created:", authData.user.id);
 
     // ============================================
-    // 11. INSERT INTO PROFILES TABLE (with email)
+    // 11. INSERT INTO PROFILES TABLE
     // ============================================
     const { error: profileError } = await supabase.from("profiles").insert({
       id: authData.user.id,
-      email: email,  // Added email field
+      email: email,
       full_name,
       phone,
       role,
@@ -254,7 +236,7 @@ router.post("/register", async (req, res) => {
     });
 
     if (profileError) {
-      console.error("Profile error:", profileError);
+      console.error("❌ Profile error:", profileError);
       // Rollback - delete the auth user
       await supabase.auth.admin.deleteUser(authData.user.id);
       return res.status(400).json({
@@ -263,7 +245,7 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    console.log("Profile created for:", authData.user.id);
+    console.log("✅ Profile created for:", authData.user.id);
 
     // ============================================
     // 12. CREATE DONOR RECORD (if donor)
@@ -275,14 +257,16 @@ router.post("/register", async (req, res) => {
         is_available: true,
         total_donations: 0,
         last_donation_date: null,
+        medical_conditions: [],
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       });
 
       if (donorError) {
-        console.error("Donor creation error:", donorError);
-        // Don't fail registration, just log error
+        console.error("❌ Donor creation error:", donorError);
+        // Don't fail registration, just log
       } else {
-        console.log("Donor record created for:", authData.user.id);
+        console.log("✅ Donor record created for:", authData.user.id);
       }
     }
 
@@ -297,8 +281,9 @@ router.post("/register", async (req, res) => {
       role: role,
       redirectTo: "/login",
     });
+
   } catch (error) {
-    console.error("Registration error:", error);
+    console.error("❌ Registration error:", error);
     res.status(500).json({
       error: "Internal server error",
       details: error.message,
