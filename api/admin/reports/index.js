@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
       .select('*')
       .order('donated_at', { ascending: false });
     
-    if (!donationError && donationData) {
+    if (!donationError && donationData && donationData.length > 0) {
       const totalDonations = donationData.length;
       const totalUnits = donationData.reduce((sum, d) => sum + (d.units || 1), 0);
       
@@ -39,7 +39,7 @@ router.get('/', async (req, res) => {
       .select('*')
       .order('created_at', { ascending: false });
     
-    if (!requestError && requestData) {
+    if (!requestError && requestData && requestData.length > 0) {
       const total = requestData.length;
       const fulfilled = requestData.filter(r => r.status === 'fulfilled').length;
       const pending = requestData.filter(r => r.status === 'pending').length;
@@ -62,7 +62,7 @@ router.get('/', async (req, res) => {
       .select('*')
       .order('created_at', { ascending: false });
     
-    if (!userError && userData) {
+    if (!userError && userData && userData.length > 0) {
       const donors = userData.filter(u => u.role === 'donor').length;
       const hospitals = userData.filter(u => u.role === 'hospital').length;
       const admins = userData.filter(u => u.role === 'admin').length;
@@ -84,7 +84,7 @@ router.get('/', async (req, res) => {
       .from('blood_inventory')
       .select('*');
     
-    if (!inventoryError && inventoryData) {
+    if (!inventoryError && inventoryData && inventoryData.length > 0) {
       const totalUnits = inventoryData.reduce((sum, i) => sum + (i.units_available || 0), 0);
       const bloodGroups = inventoryData.length;
       
@@ -121,14 +121,18 @@ router.post('/generate', async (req, res) => {
   try {
     const { type } = req.body;
     
+    // Validate type
+    const validTypes = ['donation', 'request', 'user', 'inventory', 'financial'];
+    const reportType = validTypes.includes(type) ? type : 'donation';
+    
     const report = {
-      id: `${type}-report-${Date.now()}`,
-      title: `${type || 'Monthly'} Report - ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`,
-      type: type || 'donation',
+      id: `${reportType}-report-${Date.now()}`,
+      title: `${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report - ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`,
+      type: reportType,
       date: new Date().toISOString(),
       size: '0.5 MB',
       status: 'ready',
-      description: `${type || 'Monthly'} report generated successfully`,
+      description: `${reportType} report generated successfully`,
       url: '#'
     };
     
@@ -155,8 +159,15 @@ router.get('/download/:reportId', async (req, res) => {
     const { reportId } = req.params;
     const { format } = req.query;
 
-    // Generate report data based on reportId
+    // Get report data from database
     const reportData = await getReportData(reportId);
+
+    if (!reportData || !reportData.rows || reportData.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No data found for this report'
+      });
+    }
 
     if (format === 'excel') {
       // Create Excel workbook
@@ -180,7 +191,7 @@ router.get('/download/:reportId', async (req, res) => {
       // Empty row
       worksheet.addRow([]);
 
-      // Add headers
+      // Add headers with styling
       const headerRow = worksheet.addRow(reportData.headers);
       headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
       headerRow.fill = {
@@ -220,10 +231,9 @@ router.get('/download/:reportId', async (req, res) => {
       
       res.send(buffer);
     } else {
-      // PDF download (coming soon)
-      res.json({
-        success: true,
-        message: 'PDF download coming soon'
+      res.status(400).json({
+        success: false,
+        message: 'Only Excel format is supported'
       });
     }
   } catch (error) {
@@ -236,53 +246,63 @@ router.get('/download/:reportId', async (req, res) => {
 });
 
 // ============================================
-// Helper: Get Report Data
+// Helper: Get Report Data from Database
 // ============================================
 async function getReportData(reportId) {
-  // Based on reportId, fetch data from database
-  // For now, return sample data
-  
-  const reportDataMap = {
+  const reportMap = {
     'donation-report': {
       title: 'Donation Report',
-      headers: ['Sl No', 'Donor Name', 'Blood Group', 'Units', 'Date', 'Hospital', 'Status'],
-      rows: await getDonationData()
+      headers: ['Sl No', 'Donor Name', 'Blood Group', 'Units', 'Date', 'Status'],
+      data: await getDonationData()
     },
     'request-report': {
       title: 'Blood Request Report',
       headers: ['Sl No', 'Patient Name', 'Blood Group', 'Units Needed', 'Hospital', 'Priority', 'Status'],
-      rows: await getRequestData()
+      data: await getRequestData()
     },
     'user-report': {
       title: 'User Registration Report',
       headers: ['Sl No', 'Name', 'Email', 'Role', 'City', 'Status', 'Joined Date'],
-      rows: await getUserData()
+      data: await getUserData()
     },
     'inventory-report': {
       title: 'Inventory Report',
       headers: ['Blood Group', 'Units Available', 'Hospital', 'Last Updated', 'Status'],
-      rows: await getInventoryData()
+      data: await getInventoryData()
     }
   };
 
-  return reportDataMap[reportId] || reportDataMap['user-report'];
+  const report = reportMap[reportId];
+  if (!report) {
+    return null;
+  }
+
+  return {
+    title: report.title,
+    headers: report.headers,
+    rows: report.data
+  };
 }
 
 // ============================================
-// Helper: Get Donation Data
+// Helper: Get Donation Data from Database
 // ============================================
 async function getDonationData() {
-  const { data: donations } = await supabase
+  const { data: donations, error } = await supabase
     .from('donation_history')
-    .select('*, donors:donor_id(id, blood_group, profiles:profiles!inner(full_name))')
-    .order('donated_at', { ascending: false })
-    .limit(50);
+    .select(`
+      *,
+      donors:donor_id (
+        blood_group,
+        profiles:profiles!inner (
+          full_name
+        )
+      )
+    `)
+    .order('donated_at', { ascending: false });
 
-  if (!donations || donations.length === 0) {
-    return [
-      ['1', 'John Doe', 'O+', 1, new Date().toLocaleDateString(), 'City Hospital', 'Completed'],
-      ['2', 'Jane Smith', 'A+', 2, new Date().toLocaleDateString(), 'General Hospital', 'Pending']
-    ];
+  if (error || !donations || donations.length === 0) {
+    return [];
   }
 
   return donations.map((d, i) => [
@@ -291,26 +311,21 @@ async function getDonationData() {
     d.donors?.blood_group || 'N/A',
     d.units || 1,
     new Date(d.donated_at).toLocaleDateString(),
-    'Hospital',
     'Completed'
   ]);
 }
 
 // ============================================
-// Helper: Get Request Data
+// Helper: Get Request Data from Database
 // ============================================
 async function getRequestData() {
-  const { data: requests } = await supabase
+  const { data: requests, error } = await supabase
     .from('blood_requests')
     .select('*')
-    .order('created_at', { ascending: false })
-    .limit(50);
+    .order('created_at', { ascending: false });
 
-  if (!requests || requests.length === 0) {
-    return [
-      ['1', 'Patient A', 'O-', 2, 'City Hospital', 'Critical', 'Pending'],
-      ['2', 'Patient B', 'A+', 1, 'General Hospital', 'Normal', 'Fulfilled']
-    ];
+  if (error || !requests || requests.length === 0) {
+    return [];
   }
 
   return requests.map((r, i) => [
@@ -325,19 +340,16 @@ async function getRequestData() {
 }
 
 // ============================================
-// Helper: Get User Data
+// Helper: Get User Data from Database
 // ============================================
 async function getUserData() {
-  const { data: users } = await supabase
+  const { data: users, error } = await supabase
     .from('profiles')
     .select('*')
-    .order('created_at', { ascending: false })
-    .limit(50);
+    .order('created_at', { ascending: false });
 
-  if (!users || users.length === 0) {
-    return [
-      ['1', 'Admin User', 'admin@example.com', 'Admin', 'Dhaka', 'Active', new Date().toLocaleDateString()]
-    ];
+  if (error || !users || users.length === 0) {
+    return [];
   }
 
   return users.map((u, i) => [
@@ -352,19 +364,15 @@ async function getUserData() {
 }
 
 // ============================================
-// Helper: Get Inventory Data
+// Helper: Get Inventory Data from Database
 // ============================================
 async function getInventoryData() {
-  const { data: inventory } = await supabase
+  const { data: inventory, error } = await supabase
     .from('blood_inventory')
-    .select('*, profiles:hospital_id(full_name)')
-    .limit(50);
+    .select('*, profiles:hospital_id(full_name)');
 
-  if (!inventory || inventory.length === 0) {
-    return [
-      ['A+', 20, 'City Hospital', new Date().toLocaleDateString(), 'Good'],
-      ['O-', 5, 'General Hospital', new Date().toLocaleDateString(), 'Critical']
-    ];
+  if (error || !inventory || inventory.length === 0) {
+    return [];
   }
 
   return inventory.map((item) => {
