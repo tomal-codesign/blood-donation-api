@@ -1,4 +1,4 @@
-// api/emergency/index.js
+// api/emergency/index.js (Complete updated version)
 const express = require('express');
 const router = express.Router();
 const supabase = require('../../supabase');
@@ -14,7 +14,6 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Create a critical request immediately
     const { data: request, error: requestError } = await supabase
       .from('blood_requests')
       .insert({
@@ -23,6 +22,7 @@ router.post('/', async (req, res) => {
         location_lat,
         location_lng,
         city,
+        contact_phone: contact_phone || 'N/A', // ✅ Added contact_phone
         priority: 'critical',
         status: 'pending',
         units_needed: 1,
@@ -41,9 +41,8 @@ router.post('/', async (req, res) => {
       hospital_name,
       priority: 'critical',
       location: { lat: location_lat, lng: location_lng, city },
-      contact_phone,
+      contact_phone: contact_phone || 'N/A',
       timestamp: new Date().toISOString(),
-      next_step: 'Nearby eligible donors will receive notifications within 30 seconds',
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -63,7 +62,6 @@ router.get('/alerts', async (req, res) => {
 
     console.log('Fetching emergency alerts for city:', city);
 
-    // Fetch emergency requests from the last 24 hours
     const { data: alerts, error } = await supabase
       .from('blood_requests')
       .select(`
@@ -74,12 +72,11 @@ router.get('/alerts', async (req, res) => {
         priority,
         status,
         created_at,
-        contact_phone,
-        requester_id
+        contact_phone
       `)
       .eq('city', city)
       .eq('priority', 'critical')
-      .eq('status', 'pending')
+      .in('status', ['pending', 'matched'])
       .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
       .order('created_at', { ascending: false })
       .limit(10);
@@ -89,7 +86,6 @@ router.get('/alerts', async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
 
-    // Format alerts for frontend
     const formattedAlerts = alerts?.map(alert => ({
       id: alert.id,
       patient_name: 'Emergency Patient',
@@ -98,6 +94,7 @@ router.get('/alerts', async (req, res) => {
       contact_person: 'Hospital Staff',
       contact_number: alert.contact_phone || 'N/A',
       distance: 'Nearby',
+      status: alert.status,
       time: `${Math.floor((Date.now() - new Date(alert.created_at).getTime()) / 60000)} min ago`
     })) || [];
 
@@ -125,7 +122,7 @@ router.post('/respond/:alertId', async (req, res) => {
       return res.status(400).json({ error: 'Donor ID required' });
     }
 
-    // Check if alert exists
+    // Check if alert exists and is pending
     const { data: alert, error: checkError } = await supabase
       .from('blood_requests')
       .select('id, status')
@@ -133,15 +130,18 @@ router.post('/respond/:alertId', async (req, res) => {
       .single();
 
     if (checkError || !alert) {
+      console.error('Alert not found:', checkError);
       return res.status(404).json({ error: 'Alert not found' });
     }
 
     if (alert.status !== 'pending') {
-      return res.status(400).json({ error: 'This alert has already been responded to' });
+      return res.status(400).json({ 
+        error: `This alert has already been ${alert.status}` 
+      });
     }
 
     // Update the request status to 'matched'
-    const { error } = await supabase
+    const { error: updateError } = await supabase
       .from('blood_requests')
       .update({ 
         status: 'matched',
@@ -149,9 +149,9 @@ router.post('/respond/:alertId', async (req, res) => {
       })
       .eq('id', alertId);
 
-    if (error) {
-      console.error('Respond error:', error);
-      return res.status(400).json({ error: error.message });
+    if (updateError) {
+      console.error('Update error:', updateError);
+      return res.status(400).json({ error: updateError.message });
     }
 
     res.json({
@@ -160,51 +160,6 @@ router.post('/respond/:alertId', async (req, res) => {
     });
   } catch (error) {
     console.error('Respond error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============================================
-// GET - Get Single Emergency Alert Details
-// ============================================
-router.get('/:alertId', async (req, res) => {
-  try {
-    const { alertId } = req.params;
-
-    const { data: alert, error } = await supabase
-      .from('blood_requests')
-      .select(`
-        id,
-        blood_group,
-        hospital_name,
-        city,
-        priority,
-        status,
-        created_at,
-        contact_phone,
-        requester_id
-      `)
-      .eq('id', alertId)
-      .single();
-
-    if (error || !alert) {
-      return res.status(404).json({ error: 'Alert not found' });
-    }
-
-    res.json({
-      success: true,
-      alert: {
-        id: alert.id,
-        patient_name: 'Emergency Patient',
-        blood_group: alert.blood_group,
-        hospital: alert.hospital_name || 'Unknown Hospital',
-        contact_person: 'Hospital Staff',
-        contact_number: alert.contact_phone || 'N/A',
-        status: alert.status,
-        created_at: alert.created_at
-      }
-    });
-  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
