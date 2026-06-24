@@ -122,6 +122,8 @@ app.get("/health/detailed", async (req, res) => {
 // Auth routes
 app.use("/api/auth", require("./api/auth/login"));
 app.use("/api/auth", require("./api/auth/register"));
+app.use("/api/auth", require("./api/auth/change-password"));
+app.use("/api/auth", require("./api/auth/delete-account"));
 
 // AI features
 app.use("/api/ai", require("./api/ai/match"));
@@ -140,7 +142,7 @@ app.use("/api/requests", require("./api/requests"));
 app.use("/api/admin", require("./api/admin"));
 
 // Doner routes
-app.use('/api/donors', require('./api/donors'));
+app.use("/api/donors", require("./api/donors"));
 
 // ============================================
 // 404 HANDLER
