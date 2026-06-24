@@ -150,6 +150,7 @@ app.use("/api/hospitals", require("./api/hospitals"));
 // Admin routes
 app.use("/api/admin/hospitals", require("./api/admin/hospitals"));
 app.use("/api/admin/reports", require("./api/admin/reports"));
+app.use("/api/admin/profile", require("./api/admin/profile"));
 
 // ============================================
 // 404 HANDLER
