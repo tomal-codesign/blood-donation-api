@@ -1,4 +1,4 @@
-// server.js - Complete production version with your dependencies
+// server.js - Complete production version with correct routes
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -47,7 +47,6 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (mobile apps, curl)
       if (!origin) return callback(null, true);
 
       if (
@@ -133,8 +132,9 @@ app.use("/api/auth/change-password", authMiddleware, require("./api/auth/change-
 app.use("/api/auth/delete-account", authMiddleware, require("./api/auth/delete-account"));
 app.use("/api/auth/add-role", authMiddleware, require("./api/auth/add-role"));
 
-// AI features
-app.use("/api/ai", require("./api/ai"));
+// AI features - Correct paths
+app.use("/api/ai/match", require("./api/ai/match"));
+app.use("/api/ai/predict", require("./api/ai/predict"));
 
 // Emergency
 app.use("/api/emergency", require("./api/emergency"));
@@ -181,7 +181,6 @@ cron.schedule("0 * * * *", async () => {
     console.log("🔄 Running scheduled task: Auto-update expired requests");
     const supabase = require("./supabase");
     
-    // Update requests older than 7 days
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
@@ -229,7 +228,10 @@ app.get("/", (req, res) => {
       hospitals: "/api/hospitals",
       inventory: "/api/inventory",
       emergency: "/api/emergency",
-      ai: "/api/ai",
+      ai: {
+        match: "/api/ai/match",
+        predict: "/api/ai/predict",
+      },
       admin: "/api/admin",
       profile: "/api/profile",
     },
@@ -258,7 +260,6 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error("Error:", err.stack);
 
-  // Don't expose internal errors in production
   const message =
     process.env.NODE_ENV === "production"
       ? "Internal server error"
