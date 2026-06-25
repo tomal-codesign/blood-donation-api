@@ -152,6 +152,9 @@ app.use("/api/admin/hospitals", require("./api/admin/hospitals"));
 app.use("/api/admin/reports", require("./api/admin/reports"));
 app.use("/api/admin/profile", require("./api/admin/profile"));
 
+// ROle
+app.use("/api/auth", require("./api/auth/add-role"));
+
 // ============================================
 // 404 HANDLER
 // ============================================
