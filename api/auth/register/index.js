@@ -62,7 +62,7 @@ const validateCity = (city) => {
 
 router.post("/register", async (req, res) => {
   try {
-    const { email, password, full_name, phone, role, city, blood_group } = req.body;
+    const { email, password, full_name, phone, role, city, blood_group, address, registration_number, blood_bank_license } = req.body;
 
     // ============================================
     // 1. REQUIRED FIELDS VALIDATION
@@ -224,7 +224,7 @@ router.post("/register", async (req, res) => {
     // ============================================
     // 11. INSERT INTO PROFILES TABLE
     // ============================================
-    const { error: profileError } = await supabase.from("profiles").insert({
+    const profileData = {
       id: authData.user.id,
       email: email,
       full_name,
@@ -233,11 +233,19 @@ router.post("/register", async (req, res) => {
       city,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    });
+    };
+
+    // Add hospital-specific fields if role is hospital
+    if (role === 'hospital') {
+      if (address) profileData.address = address;
+      if (registration_number) profileData.registration_number = registration_number;
+      if (blood_bank_license) profileData.blood_bank_license = blood_bank_license;
+    }
+
+    const { error: profileError } = await supabase.from("profiles").insert(profileData);
 
     if (profileError) {
       console.error("❌ Profile error:", profileError);
-      // Rollback - delete the auth user
       await supabase.auth.admin.deleteUser(authData.user.id);
       return res.status(400).json({
         error: "Failed to create profile",
@@ -248,9 +256,47 @@ router.post("/register", async (req, res) => {
     console.log("✅ Profile created for:", authData.user.id);
 
     // ============================================
-    // 12. CREATE DONOR RECORD (if donor)
+    // 12. INSERT INTO USER_ROLES TABLE
     // ============================================
-    if (role === "donor" && blood_group) {
+    const rolesToAdd = [role];
+
+    // Auto-add patient role for donors
+    if (role === 'donor') {
+      rolesToAdd.push('patient');
+    }
+
+    // Auto-add donor and patient roles for admin
+    if (role === 'admin') {
+      rolesToAdd.push('donor', 'patient', 'hospital');
+    }
+
+    // Auto-add patient role for hospital (optional)
+    if (role === 'hospital') {
+      // hospitals can also be patients if needed
+      // rolesToAdd.push('patient');
+    }
+
+    // Insert all roles
+    for (const r of rolesToAdd) {
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .insert({
+          user_id: authData.user.id,
+          role: r,
+          created_at: new Date().toISOString(),
+        });
+
+      if (roleError) {
+        console.error(`❌ Role error for ${r}:`, roleError);
+      } else {
+        console.log(`✅ Role ${r} added for user:`, authData.user.id);
+      }
+    }
+
+    // ============================================
+    // 13. CREATE DONOR RECORD (if donor)
+    // ============================================
+    if (role === 'donor' && blood_group) {
       const { error: donorError } = await supabase.from("donors").insert({
         id: authData.user.id,
         blood_group,
@@ -264,14 +310,13 @@ router.post("/register", async (req, res) => {
 
       if (donorError) {
         console.error("❌ Donor creation error:", donorError);
-        // Don't fail registration, just log
       } else {
         console.log("✅ Donor record created for:", authData.user.id);
       }
     }
 
     // ============================================
-    // 13. SUCCESS RESPONSE
+    // 14. SUCCESS RESPONSE
     // ============================================
     res.status(201).json({
       success: true,
@@ -279,6 +324,7 @@ router.post("/register", async (req, res) => {
       userId: authData.user.id,
       email: authData.user.email,
       role: role,
+      autoAddedRoles: rolesToAdd.filter(r => r !== role),
       redirectTo: "/login",
     });
 

@@ -67,14 +67,50 @@ router.post("/login", async (req, res) => {
         return res.status(500).json({ error: "Failed to fetch user profile" });
       }
 
-      // Fetch donor info if role is donor
+      // ✅ CREATE ROLES FOR NEW USER
+      let roles = [newProfile.role || 'donor'];
+      
+      // Add patient role for donor
+      if (newProfile.role === 'donor' || newProfile.role === 'admin') {
+        await supabase
+          .from('user_roles')
+          .upsert({
+            user_id: data.user.id,
+            role: 'patient'
+          }, { onConflict: 'user_id,role' });
+        if (!roles.includes('patient')) roles.push('patient');
+      }
+      
+      // Add hospital role for admin
+      if (newProfile.role === 'admin') {
+        await supabase
+          .from('user_roles')
+          .upsert({
+            user_id: data.user.id,
+            role: 'hospital'
+          }, { onConflict: 'user_id,role' });
+        if (!roles.includes('hospital')) roles.push('hospital');
+      }
+      
+      // Also add donor role for admin if not already
+      if (newProfile.role === 'admin') {
+        await supabase
+          .from('user_roles')
+          .upsert({
+            user_id: data.user.id,
+            role: 'donor'
+          }, { onConflict: 'user_id,role' });
+        if (!roles.includes('donor')) roles.push('donor');
+      }
+
+      const currentRole = newProfile.role || 'donor';
+
+      // Fetch donor info if donor role exists
       let donorInfo = null;
-      if (newProfile.role === "donor") {
+      if (roles.includes('donor')) {
         const { data: donor } = await supabase
           .from("donors")
-          .select(
-            "blood_group, is_available, total_donations, last_donation_date",
-          )
+          .select("blood_group, is_available, total_donations, last_donation_date")
           .eq("id", data.user.id)
           .maybeSingle();
         donorInfo = donor;
@@ -83,10 +119,13 @@ router.post("/login", async (req, res) => {
       const userResponse = {
         id: data.user.id,
         email: data.user.email,
-        role: newProfile.role,
+        roles: roles,
+        currentRole: currentRole,
         full_name: newProfile.full_name,
         phone: newProfile.phone,
         city: newProfile.city,
+        location_lat: newProfile.location_lat,
+        location_lng: newProfile.location_lng,
         ...(donorInfo && {
           blood_group: donorInfo.blood_group,
           is_available: donorInfo.is_available,
@@ -96,6 +135,7 @@ router.post("/login", async (req, res) => {
       };
 
       console.log("✅ Login successful for:", userResponse.email);
+      console.log("✅ User roles:", roles);
 
       return res.json({
         token: data.session.access_token,
@@ -110,14 +150,79 @@ router.post("/login", async (req, res) => {
 
     console.log("✅ Profile found:", profile.id, "Role:", profile.role);
 
-    // Fetch donor info if role is donor
+    // ✅ FETCH USER ROLES
+    let { data: userRoles, error: rolesError } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", data.user.id);
+
+    if (rolesError) {
+      console.error("❌ Roles fetch error:", rolesError);
+    }
+
+    let roles = userRoles?.map(r => r.role) || [];
+
+    // ✅ AUTO-CREATE ROLES IF NOT EXISTS
+    if (roles.length === 0) {
+      console.log('⚠️ No roles found, creating default roles...');
+      
+      // Add primary role
+      await supabase
+        .from('user_roles')
+        .upsert({
+          user_id: data.user.id,
+          role: profile.role
+        }, { onConflict: 'user_id,role' });
+      
+      roles = [profile.role];
+      
+      // Add patient role for donor or admin
+      if (profile.role === 'donor' || profile.role === 'admin') {
+        await supabase
+          .from('user_roles')
+          .upsert({
+            user_id: data.user.id,
+            role: 'patient'
+          }, { onConflict: 'user_id,role' });
+        if (!roles.includes('patient')) roles.push('patient');
+      }
+      
+      // Add hospital role for admin
+      if (profile.role === 'admin') {
+        await supabase
+          .from('user_roles')
+          .upsert({
+            user_id: data.user.id,
+            role: 'hospital'
+          }, { onConflict: 'user_id,role' });
+        if (!roles.includes('hospital')) roles.push('hospital');
+      }
+      
+      // Add donor role for admin if not already
+      if (profile.role === 'admin' && !roles.includes('donor')) {
+        await supabase
+          .from('user_roles')
+          .upsert({
+            user_id: data.user.id,
+            role: 'donor'
+          }, { onConflict: 'user_id,role' });
+        roles.push('donor');
+      }
+      
+      console.log('✅ Roles created:', roles);
+    }
+
+    // Set current role
+    const currentRole = roles.includes('admin') ? 'admin' : 
+                        roles.includes('donor') ? 'donor' : 
+                        roles[0] || 'donor';
+
+    // Fetch donor info if donor role exists
     let donorInfo = null;
-    if (profile.role === "donor") {
+    if (roles.includes('donor')) {
       const { data: donor, error: donorError } = await supabase
         .from("donors")
-        .select(
-          "blood_group, is_available, total_donations, last_donation_date",
-        )
+        .select("blood_group, is_available, total_donations, last_donation_date")
         .eq("id", data.user.id)
         .maybeSingle();
 
@@ -132,7 +237,8 @@ router.post("/login", async (req, res) => {
     const userResponse = {
       id: data.user.id,
       email: data.user.email,
-      role: profile.role,
+      roles: roles,
+      currentRole: currentRole,
       full_name: profile.full_name,
       phone: profile.phone,
       city: profile.city,
@@ -147,6 +253,8 @@ router.post("/login", async (req, res) => {
     };
 
     console.log("✅ Login successful for:", userResponse.email);
+    console.log("✅ User roles:", roles);
+    console.log("✅ Current role:", currentRole);
 
     res.json({
       token: data.session.access_token,
