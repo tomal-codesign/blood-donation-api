@@ -2,13 +2,14 @@
 const express = require('express');
 const router = express.Router();
 const supabase = require('../../supabase');
+const authMiddleware = require('../middleware/auth');
 
 // ============================================
-// 🔥 স্পেসিফিক রাউট (উপরে রাখুন)
+// 🔥 স্পেসিফিক রাউট (উপরে রাখুন) - প্রোটেক্টেড
 // ============================================
 
 // ========== GET MY REQUESTS (for patient) ==========
-router.get('/my-requests', async (req, res) => {
+router.get('/my-requests', authMiddleware, async (req, res) => {
   try {
     const userId = req.user?.id;
     
@@ -47,7 +48,7 @@ router.get('/my-requests', async (req, res) => {
 });
 
 // ========== GET HOSPITAL REQUESTS ==========
-router.get('/hospital', async (req, res) => {
+router.get('/hospital', authMiddleware, async (req, res) => {
   try {
     const hospitalId = req.user?.id;
     
@@ -85,7 +86,7 @@ router.get('/hospital', async (req, res) => {
 });
 
 // ========== GET STATISTICS ==========
-router.get('/stats/dashboard', async (req, res) => {
+router.get('/stats/dashboard', authMiddleware, async (req, res) => {
   try {
     const userId = req.user?.id;
     const userRole = req.user?.role;
@@ -131,7 +132,7 @@ router.get('/stats/dashboard', async (req, res) => {
 });
 
 // ========== GET REQUESTS BY BLOOD GROUP ==========
-router.get('/blood-group/:bloodGroup', async (req, res) => {
+router.get('/blood-group/:bloodGroup', authMiddleware, async (req, res) => {
   try {
     const { bloodGroup } = req.params;
     const { status } = req.query;
