@@ -1,4 +1,4 @@
-// server.js - Complete production version with correct routes
+// server.js - Complete production version with new endpoints
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -18,7 +18,7 @@ app.use(
   helmet({
     contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
-  })
+  }),
 );
 
 // Compression for faster responses
@@ -47,6 +47,7 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
+      // Allow requests with no origin (mobile apps, curl)
       if (!origin) return callback(null, true);
 
       if (
@@ -62,7 +63,7 @@ app.use(
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  })
+  }),
 );
 
 // Parse JSON bodies
@@ -122,54 +123,72 @@ app.get("/health/detailed", async (req, res) => {
 const authMiddleware = require("./api/middleware/auth");
 
 // ============================================
-// API ROUTES
+// API ROUTES (Existing + New)
 // ============================================
 
-// Auth routes (public)
-app.use("/api/auth/login", require("./api/auth/login"));
-app.use("/api/auth/register", require("./api/auth/register"));
-app.use("/api/auth/change-password", authMiddleware, require("./api/auth/change-password"));
-app.use("/api/auth/delete-account", authMiddleware, require("./api/auth/delete-account"));
-app.use("/api/auth/add-role", authMiddleware, require("./api/auth/add-role"));
+// ---------- AUTH ROUTES (Existing) ----------
+app.use("/api/auth", require("./api/auth/login"));
+app.use("/api/auth", require("./api/auth/register"));
+app.use("/api/auth", require("./api/auth/change-password"));
+app.use("/api/auth", require("./api/auth/delete-account"));
+app.use("/api/auth", require("./api/auth/add-role"));
 
-// AI features - Correct paths
-app.use("/api/ai/match", require("./api/ai/match"));
-app.use("/api/ai/predict", require("./api/ai/predict"));
+// ---------- NEW: Profile Routes ----------
+app.use("/api/profile", authMiddleware, require("./api/profile"));
 
-// Emergency
+// ---------- AI FEATURES (Existing) ----------
+app.use("/api/ai", require("./api/ai/match"));
+app.use("/api/ai", require("./api/ai/predict"));
+
+// ---------- EMERGENCY (Existing) ----------
 app.use("/api/emergency", require("./api/emergency"));
 
-// Inventory management
+// ---------- INVENTORY (Existing) ----------
 app.use("/api/inventory", require("./api/inventory"));
 
-// Blood requests (public routes)
+// ---------- BLOOD REQUESTS (Existing) ----------
 app.use("/api/requests", require("./api/requests"));
 
-// Protected blood request routes
+// ---------- NEW: Protected Request Routes ----------
 app.use("/api/requests/my-requests", authMiddleware, require("./api/requests"));
 app.use("/api/requests/hospital", authMiddleware, require("./api/requests"));
 app.use("/api/requests/stats/dashboard", authMiddleware, require("./api/requests"));
 
-// Donor routes
+// ---------- DONORS (Existing) ----------
 app.use("/api/donors", require("./api/donors"));
+
+// ---------- NEW: Protected Donor Routes ----------
 app.use("/api/donors/profile", authMiddleware, require("./api/donors"));
 app.use("/api/donors/availability", authMiddleware, require("./api/donors"));
+app.use("/api/donors/history", authMiddleware, require("./api/donors"));
 
-// Hospitals
+// ---------- HOSPITALS (Existing) ----------
 app.use("/api/hospitals", require("./api/hospitals"));
+
+// ---------- NEW: Protected Hospital Routes ----------
 app.use("/api/hospitals/profile", authMiddleware, require("./api/hospitals"));
 app.use("/api/hospitals/inventory", authMiddleware, require("./api/hospitals"));
+app.use("/api/hospitals/requests", authMiddleware, require("./api/hospitals"));
 
-// Admin routes (protected)
-app.use("/api/admin", authMiddleware, require("./api/admin"));
+// ---------- ADMIN ROUTES (Existing) ----------
+app.use("/api/admin", require("./api/admin"));
+app.use("/api/admin/hospitals", require("./api/admin/hospitals"));
+app.use("/api/admin/reports", require("./api/admin/reports"));
+app.use("/api/admin/profile", require("./api/admin/profile"));
+
+// ---------- NEW: Admin Protected Routes ----------
 app.use("/api/admin/users", authMiddleware, require("./api/admin"));
-app.use("/api/admin/hospitals", authMiddleware, require("./api/admin/hospitals"));
-app.use("/api/admin/reports", authMiddleware, require("./api/admin/reports"));
-app.use("/api/admin/profile", authMiddleware, require("./api/admin/profile"));
 app.use("/api/admin/dashboard", authMiddleware, require("./api/admin"));
+app.use("/api/admin/ai-monitor", authMiddleware, require("./api/admin"));
 
-// Profile routes (protected)
-app.use("/api/profile", authMiddleware, require("./api/profile"));
+// ---------- NEW: Blood Bank Routes ----------
+app.use("/api/blood-banks", require("./api/blood-banks"));
+
+// ---------- NEW: Notification Routes ----------
+app.use("/api/notifications", authMiddleware, require("./api/notifications"));
+
+// ---------- NEW: Analytics Routes ----------
+app.use("/api/analytics", authMiddleware, require("./api/analytics"));
 
 // ============================================
 // CRON JOBS (Background Tasks)
@@ -220,20 +239,33 @@ app.get("/", (req, res) => {
     name: "Blood Donation API",
     version: "1.0.0",
     status: "running",
-    documentation: "/api/health",
+    documentation: "/health",
     endpoints: {
       auth: "/api/auth",
+      profile: "/api/profile",
       requests: "/api/requests",
+      "my-requests": "/api/requests/my-requests",
+      "hospital-requests": "/api/requests/hospital",
       donors: "/api/donors",
+      "donor-profile": "/api/donors/profile",
       hospitals: "/api/hospitals",
+      "hospital-profile": "/api/hospitals/profile",
       inventory: "/api/inventory",
+      "blood-banks": "/api/blood-banks",
       emergency: "/api/emergency",
       ai: {
         match: "/api/ai/match",
         predict: "/api/ai/predict",
       },
-      admin: "/api/admin",
-      profile: "/api/profile",
+      admin: {
+        dashboard: "/api/admin/dashboard",
+        users: "/api/admin/users",
+        hospitals: "/api/admin/hospitals",
+        reports: "/api/admin/reports",
+        "ai-monitor": "/api/admin/ai-monitor",
+      },
+      notifications: "/api/notifications",
+      analytics: "/api/analytics",
     },
     timestamp: new Date().toISOString(),
   });
@@ -260,6 +292,7 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error("Error:", err.stack);
 
+  // Don't expose internal errors in production
   const message =
     process.env.NODE_ENV === "production"
       ? "Internal server error"
@@ -288,7 +321,6 @@ const server = app.listen(PORT, () => {
   console.log(`❤️  Health: http://localhost:${PORT}/health`);
   console.log(`🔍 Detailed: http://localhost:${PORT}/health/detailed`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log(`📦 Node Version: ${process.version}`);
   console.log(`🕐 Started: ${new Date().toISOString()}`);
   console.log(`=================================\n`);
 });
