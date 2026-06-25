@@ -1,9 +1,10 @@
-// server.js - Complete production version
+// server.js - Complete production version with your dependencies
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const compression = require("compression");
 const morgan = require("morgan");
+const cron = require("node-cron");
 require("dotenv").config();
 
 const app = express();
@@ -17,7 +18,7 @@ app.use(
   helmet({
     contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
-  }),
+  })
 );
 
 // Compression for faster responses
@@ -62,7 +63,7 @@ app.use(
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  }),
+  })
 );
 
 // Parse JSON bodies
@@ -116,18 +117,24 @@ app.get("/health/detailed", async (req, res) => {
 });
 
 // ============================================
+// AUTH MIDDLEWARE
+// ============================================
+
+const authMiddleware = require("./api/middleware/auth");
+
+// ============================================
 // API ROUTES
 // ============================================
 
-// Auth routes
-app.use("/api/auth", require("./api/auth/login"));
-app.use("/api/auth", require("./api/auth/register"));
-app.use("/api/auth", require("./api/auth/change-password"));
-app.use("/api/auth", require("./api/auth/delete-account"));
+// Auth routes (public)
+app.use("/api/auth/login", require("./api/auth/login"));
+app.use("/api/auth/register", require("./api/auth/register"));
+app.use("/api/auth/change-password", authMiddleware, require("./api/auth/change-password"));
+app.use("/api/auth/delete-account", authMiddleware, require("./api/auth/delete-account"));
+app.use("/api/auth/add-role", authMiddleware, require("./api/auth/add-role"));
 
 // AI features
-app.use("/api/ai", require("./api/ai/match"));
-app.use("/api/ai", require("./api/ai/predict"));
+app.use("/api/ai", require("./api/ai"));
 
 // Emergency
 app.use("/api/emergency", require("./api/emergency"));
@@ -135,25 +142,100 @@ app.use("/api/emergency", require("./api/emergency"));
 // Inventory management
 app.use("/api/inventory", require("./api/inventory"));
 
-// Blood requests
+// Blood requests (public routes)
 app.use("/api/requests", require("./api/requests"));
 
-// Admin routes
-app.use("/api/admin", require("./api/admin"));
+// Protected blood request routes
+app.use("/api/requests/my-requests", authMiddleware, require("./api/requests"));
+app.use("/api/requests/hospital", authMiddleware, require("./api/requests"));
+app.use("/api/requests/stats/dashboard", authMiddleware, require("./api/requests"));
 
-// Doner routes
+// Donor routes
 app.use("/api/donors", require("./api/donors"));
+app.use("/api/donors/profile", authMiddleware, require("./api/donors"));
+app.use("/api/donors/availability", authMiddleware, require("./api/donors"));
 
 // Hospitals
 app.use("/api/hospitals", require("./api/hospitals"));
+app.use("/api/hospitals/profile", authMiddleware, require("./api/hospitals"));
+app.use("/api/hospitals/inventory", authMiddleware, require("./api/hospitals"));
 
-// Admin routes
-app.use("/api/admin/hospitals", require("./api/admin/hospitals"));
-app.use("/api/admin/reports", require("./api/admin/reports"));
-app.use("/api/admin/profile", require("./api/admin/profile"));
+// Admin routes (protected)
+app.use("/api/admin", authMiddleware, require("./api/admin"));
+app.use("/api/admin/users", authMiddleware, require("./api/admin"));
+app.use("/api/admin/hospitals", authMiddleware, require("./api/admin/hospitals"));
+app.use("/api/admin/reports", authMiddleware, require("./api/admin/reports"));
+app.use("/api/admin/profile", authMiddleware, require("./api/admin/profile"));
+app.use("/api/admin/dashboard", authMiddleware, require("./api/admin"));
 
-// ROle
-app.use("/api/auth", require("./api/auth/add-role"));
+// Profile routes (protected)
+app.use("/api/profile", authMiddleware, require("./api/profile"));
+
+// ============================================
+// CRON JOBS (Background Tasks)
+// ============================================
+
+// Auto-update expired requests (runs every hour)
+cron.schedule("0 * * * *", async () => {
+  try {
+    console.log("🔄 Running scheduled task: Auto-update expired requests");
+    const supabase = require("./supabase");
+    
+    // Update requests older than 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const { error } = await supabase
+      .from("blood_requests")
+      .update({ status: "expired" })
+      .eq("status", "pending")
+      .lt("created_at", sevenDaysAgo.toISOString());
+    
+    if (error) {
+      console.error("Cron job error:", error);
+    } else {
+      console.log("✅ Cron job completed successfully");
+    }
+  } catch (error) {
+    console.error("Cron job error:", error);
+  }
+});
+
+// Blood shortage prediction (runs daily at midnight)
+cron.schedule("0 0 * * *", async () => {
+  try {
+    console.log("🔄 Running scheduled task: Blood shortage prediction");
+    // Add your prediction logic here
+    console.log("✅ Blood shortage prediction completed");
+  } catch (error) {
+    console.error("Prediction cron error:", error);
+  }
+});
+
+// ============================================
+// ROOT ROUTE
+// ============================================
+
+app.get("/", (req, res) => {
+  res.json({
+    name: "Blood Donation API",
+    version: "1.0.0",
+    status: "running",
+    documentation: "/api/health",
+    endpoints: {
+      auth: "/api/auth",
+      requests: "/api/requests",
+      donors: "/api/donors",
+      hospitals: "/api/hospitals",
+      inventory: "/api/inventory",
+      emergency: "/api/emergency",
+      ai: "/api/ai",
+      admin: "/api/admin",
+      profile: "/api/profile",
+    },
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // ============================================
 // 404 HANDLER
@@ -161,6 +243,7 @@ app.use("/api/auth", require("./api/auth/add-role"));
 
 app.use((req, res) => {
   res.status(404).json({
+    success: false,
     error: "Route not found",
     path: req.path,
     method: req.method,
@@ -182,6 +265,7 @@ app.use((err, req, res, next) => {
       : err.message;
 
   res.status(err.status || 500).json({
+    success: false,
     error: "Something went wrong!",
     message,
     timestamp: new Date().toISOString(),
@@ -203,6 +287,7 @@ const server = app.listen(PORT, () => {
   console.log(`❤️  Health: http://localhost:${PORT}/health`);
   console.log(`🔍 Detailed: http://localhost:${PORT}/health/detailed`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
+  console.log(`📦 Node Version: ${process.version}`);
   console.log(`🕐 Started: ${new Date().toISOString()}`);
   console.log(`=================================\n`);
 });
