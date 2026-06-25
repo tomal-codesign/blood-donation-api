@@ -3,6 +3,249 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../../supabase');
 
+// ============================================
+// 🔥 স্পেসিফিক রাউট (উপরে রাখুন)
+// ============================================
+
+// ========== GET MY REQUESTS (for patient) ==========
+router.get('/my-requests', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('blood_requests')
+      .select('*, profiles:requester_id(full_name, phone, city)')
+      .eq('requester_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      data: data || []
+    });
+  } catch (error) {
+    console.error('Get my requests error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ========== GET HOSPITAL REQUESTS ==========
+router.get('/hospital', async (req, res) => {
+  try {
+    const hospitalId = req.user?.id;
+    
+    if (!hospitalId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('blood_requests')
+      .select('*, profiles:requester_id(full_name, phone, city)')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      data: data || []
+    });
+  } catch (error) {
+    console.error('Get hospital requests error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ========== GET STATISTICS ==========
+router.get('/stats/dashboard', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+
+    let query = supabase.from('blood_requests').select('*');
+    
+    if (userRole === 'patient' && userId) {
+      query = query.eq('requester_id', userId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    const stats = {
+      total: data?.length || 0,
+      pending: data?.filter(r => r.status === 'pending').length || 0,
+      matched: data?.filter(r => r.status === 'matched').length || 0,
+      fulfilled: data?.filter(r => r.status === 'fulfilled').length || 0,
+      cancelled: data?.filter(r => r.status === 'cancelled').length || 0,
+      critical: data?.filter(r => r.priority === 'critical').length || 0,
+      moderate: data?.filter(r => r.priority === 'moderate').length || 0,
+      normal: data?.filter(r => r.priority === 'normal').length || 0
+    };
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error('Get stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ========== GET REQUESTS BY BLOOD GROUP ==========
+router.get('/blood-group/:bloodGroup', async (req, res) => {
+  try {
+    const { bloodGroup } = req.params;
+    const { status } = req.query;
+
+    let query = supabase
+      .from('blood_requests')
+      .select('*, profiles:requester_id(full_name, phone, city)')
+      .eq('blood_group', bloodGroup)
+      .order('created_at', { ascending: false });
+
+    if (status) query = query.eq('status', status);
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      data: data || []
+    });
+  } catch (error) {
+    console.error('Get by blood group error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ============================================
+// 🔥 জেনেরিক রাউট (নিচে রাখুন)
+// ============================================
+
+// ========== GET ALL REQUESTS (with filters) ==========
+router.get('/', async (req, res) => {
+  try {
+    const { city, blood_group, status, priority, limit = 50, offset = 0 } = req.query;
+
+    let query = supabase
+      .from('blood_requests')
+      .select('*, profiles:requester_id(full_name, phone, city, email)')
+      .order('created_at', { ascending: false })
+      .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
+
+    if (city) query = query.eq('city', city);
+    if (blood_group) query = query.eq('blood_group', blood_group);
+    if (status) query = query.eq('status', status);
+    if (priority) query = query.eq('priority', priority);
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      data: data || [],
+      count: data?.length || 0
+    });
+  } catch (error) {
+    console.error('Get requests error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ========== GET SINGLE REQUEST ==========
+router.get('/:id', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('blood_requests')
+      .select('*, profiles:requester_id(full_name, phone, city, email)')
+      .eq('id', req.params.id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({
+          success: false,
+          message: 'Request not found'
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      data
+    });
+  } catch (error) {
+    console.error('Get request error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 // ========== CREATE BLOOD REQUEST ==========
 router.post('/', async (req, res) => {
   try {
@@ -18,7 +261,6 @@ router.post('/', async (req, res) => {
       contact_phone
     } = req.body;
 
-    // Validation
     if (!requester_id || !blood_group || !units_needed || !hospital_name) {
       return res.status(400).json({
         success: false,
@@ -26,7 +268,6 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Auto-classify priority
     let priority = 'normal';
     if (
       units_needed >= 4 ||
@@ -79,160 +320,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-// ========== GET ALL REQUESTS (with filters) ==========
-router.get('/', async (req, res) => {
-  try {
-    const { city, blood_group, status, priority, limit = 50, offset = 0 } = req.query;
-
-    let query = supabase
-      .from('blood_requests')
-      .select('*, profiles:requester_id(full_name, phone, city, email)')
-      .order('created_at', { ascending: false })
-      .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
-
-    if (city) query = query.eq('city', city);
-    if (blood_group) query = query.eq('blood_group', blood_group);
-    if (status) query = query.eq('status', status);
-    if (priority) query = query.eq('priority', priority);
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Supabase error:', error);
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    res.json({
-      success: true,
-      data: data || [],
-      count: data?.length || 0
-    });
-  } catch (error) {
-    console.error('Get requests error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
-
-// ========== GET MY REQUESTS (for patient) ==========
-router.get('/my-requests', async (req, res) => {
-  try {
-    // Get user from token (assuming middleware sets req.user)
-    const userId = req.user?.id;
-    
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'User not authenticated'
-      });
-    }
-
-    const { data, error } = await supabase
-      .from('blood_requests')
-      .select('*, profiles:requester_id(full_name, phone, city)')
-      .eq('requester_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Supabase error:', error);
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    res.json({
-      success: true,
-      data: data || []
-    });
-  } catch (error) {
-    console.error('Get my requests error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
-
-// ========== GET HOSPITAL REQUESTS ==========
-router.get('/hospital', async (req, res) => {
-  try {
-    const hospitalId = req.user?.id;
-    
-    if (!hospitalId) {
-      return res.status(401).json({
-        success: false,
-        message: 'User not authenticated'
-      });
-    }
-
-    // Get all requests (hospital can see all)
-    const { data, error } = await supabase
-      .from('blood_requests')
-      .select('*, profiles:requester_id(full_name, phone, city)')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Supabase error:', error);
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    res.json({
-      success: true,
-      data: data || []
-    });
-  } catch (error) {
-    console.error('Get hospital requests error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
-
-// ========== GET SINGLE REQUEST ==========
-router.get('/:id', async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('blood_requests')
-      .select('*, profiles:requester_id(full_name, phone, city, email)')
-      .eq('id', req.params.id)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return res.status(404).json({
-          success: false,
-          message: 'Request not found'
-        });
-      }
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    res.json({
-      success: true,
-      data
-    });
-  } catch (error) {
-    console.error('Get request error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
-
 // ========== UPDATE REQUEST STATUS ==========
 router.patch('/:id/status', async (req, res) => {
   try {
@@ -245,7 +332,6 @@ router.patch('/:id/status', async (req, res) => {
       });
     }
 
-    // Validate status
     const validStatuses = ['pending', 'matched', 'fulfilled', 'cancelled'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
@@ -292,7 +378,6 @@ router.patch('/:id', async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
-    // Remove fields that shouldn't be updated
     delete updates.id;
     delete updates.created_at;
     delete updates.requester_id;
@@ -341,7 +426,6 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check if request exists and is pending
     const { data: existing, error: fetchError } = await supabase
       .from('blood_requests')
       .select('status')
@@ -381,90 +465,6 @@ router.delete('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Delete request error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
-
-// ========== GET REQUESTS BY BLOOD GROUP ==========
-router.get('/blood-group/:bloodGroup', async (req, res) => {
-  try {
-    const { bloodGroup } = req.params;
-    const { status } = req.query;
-
-    let query = supabase
-      .from('blood_requests')
-      .select('*, profiles:requester_id(full_name, phone, city)')
-      .eq('blood_group', bloodGroup)
-      .order('created_at', { ascending: false });
-
-    if (status) query = query.eq('status', status);
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Supabase error:', error);
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    res.json({
-      success: true,
-      data: data || []
-    });
-  } catch (error) {
-    console.error('Get by blood group error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
-
-// ========== GET STATISTICS ==========
-router.get('/stats/dashboard', async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const userRole = req.user?.role;
-
-    let query = supabase.from('blood_requests').select('*');
-    
-    // If patient, only their requests
-    if (userRole === 'patient' && userId) {
-      query = query.eq('requester_id', userId);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Supabase error:', error);
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    const stats = {
-      total: data?.length || 0,
-      pending: data?.filter(r => r.status === 'pending').length || 0,
-      matched: data?.filter(r => r.status === 'matched').length || 0,
-      fulfilled: data?.filter(r => r.status === 'fulfilled').length || 0,
-      cancelled: data?.filter(r => r.status === 'cancelled').length || 0,
-      critical: data?.filter(r => r.priority === 'critical').length || 0,
-      moderate: data?.filter(r => r.priority === 'moderate').length || 0,
-      normal: data?.filter(r => r.priority === 'normal').length || 0
-    };
-
-    res.json({
-      success: true,
-      data: stats
-    });
-  } catch (error) {
-    console.error('Get stats error:', error);
     res.status(500).json({
       success: false,
       message: error.message
