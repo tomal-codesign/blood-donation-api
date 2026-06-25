@@ -1,4 +1,4 @@
-// server.js - Complete production version with new endpoints
+// server.js - Complete Production Server
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -18,7 +18,7 @@ app.use(
   helmet({
     contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
-  }),
+  })
 );
 
 // Compression for faster responses
@@ -37,6 +37,7 @@ if (process.env.NODE_ENV === "production") {
 
 const allowedOrigins = [
   "http://localhost:3000",
+  "http://localhost:3001",
   "http://localhost:5000",
   "https://blood-donation.vercel.app",
   "https://blood-donation-frontend.vercel.app",
@@ -63,12 +64,18 @@ app.use(
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  }),
+  })
 );
 
 // Parse JSON bodies
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// ============================================
+// AUTH MIDDLEWARE
+// ============================================
+
+const authMiddleware = require("./api/middleware/auth");
 
 // ============================================
 // HEALTH CHECK ENDPOINTS
@@ -117,78 +124,150 @@ app.get("/health/detailed", async (req, res) => {
 });
 
 // ============================================
-// AUTH MIDDLEWARE
+// ROOT ROUTE
 // ============================================
 
-const authMiddleware = require("./api/middleware/auth");
+app.get("/", (req, res) => {
+  res.json({
+    name: "Blood Donation API",
+    version: "1.0.0",
+    status: "running",
+    documentation: "/health",
+    endpoints: {
+      auth: {
+        register: "POST /api/auth/register",
+        login: "POST /api/auth/login",
+        "change-password": "POST /api/auth/change-password",
+        "delete-account": "DELETE /api/auth/delete-account",
+        "add-role": "POST /api/auth/add-role",
+      },
+      requests: {
+        all: "GET /api/requests",
+        create: "POST /api/requests",
+        single: "GET /api/requests/:id",
+        update: "PATCH /api/requests/:id",
+        status: "PATCH /api/requests/:id/status",
+        delete: "DELETE /api/requests/:id",
+        my: "GET /api/requests/my-requests",
+        hospital: "GET /api/requests/hospital",
+        stats: "GET /api/requests/stats/dashboard",
+        byBloodGroup: "GET /api/requests/blood-group/:bloodGroup",
+      },
+      donors: {
+        profile: "GET /api/donors/profile",
+        update: "PUT /api/donors/profile",
+        availability: "PATCH /api/donors/availability",
+        history: "GET /api/donors/history",
+        stats: "GET /api/donors/stats",
+        donate: "POST /api/donors/donate",
+        matches: "GET /api/donors/matches",
+        upcoming: "GET /api/donors/upcoming",
+      },
+      hospitals: {
+        profile: "GET /api/hospitals/profile",
+        update: "PUT /api/hospitals/profile",
+        inventory: "GET /api/hospitals/inventory",
+        donors: "GET /api/hospitals/donors/:hospitalId",
+        history: "GET /api/hospitals/donation-history/:hospitalId",
+      },
+      inventory: {
+        get: "GET /api/inventory/:hospitalId",
+        update: "PATCH /api/inventory/update",
+        bulk: "POST /api/inventory/bulk-update",
+      },
+      emergency: {
+        create: "POST /api/emergency",
+        alerts: "GET /api/emergency/alerts",
+        respond: "POST /api/emergency/respond/:alertId",
+        single: "GET /api/emergency/:alertId",
+      },
+      ai: {
+        match: "POST /api/ai/match",
+        predict: "GET /api/ai/predict",
+      },
+      admin: {
+        dashboard: "GET /api/admin/dashboard",
+        analytics: "GET /api/admin/analytics",
+        users: "GET /api/admin/users",
+        "user-role": "PATCH /api/admin/users/:userId/role",
+        hospitals: "GET /api/admin/hospitals",
+        "hospital-verify": "PATCH /api/admin/hospitals/:hospitalId/verify",
+        "hospital-delete": "DELETE /api/admin/hospitals/:hospitalId",
+        "hospital-create": "POST /api/admin/hospitals/create",
+        reports: "GET /api/admin/reports",
+        "report-generate": "POST /api/admin/reports/generate",
+        "report-download": "GET /api/admin/reports/download/:reportId",
+        profile: "GET /api/admin/profile",
+        "profile-update": "PUT /api/admin/profile",
+        "ai-monitor": "GET /api/admin/ai-monitor",
+      },
+      profile: {
+        get: "GET /api/profile",
+        update: "PUT /api/profile",
+      },
+      health: {
+        basic: "GET /health",
+        detailed: "GET /health/detailed",
+      },
+    },
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // ============================================
-// API ROUTES (Existing + New)
+// API ROUTES
 // ============================================
 
-// ---------- AUTH ROUTES (Existing) ----------
+// ---------- AUTH ROUTES ----------
 app.use("/api/auth", require("./api/auth/login"));
 app.use("/api/auth", require("./api/auth/register"));
-app.use("/api/auth", require("./api/auth/change-password"));
-app.use("/api/auth", require("./api/auth/delete-account"));
-app.use("/api/auth", require("./api/auth/add-role"));
+app.use("/api/auth", authMiddleware, require("./api/auth/change-password"));
+app.use("/api/auth", authMiddleware, require("./api/auth/delete-account"));
+app.use("/api/auth", authMiddleware, require("./api/auth/add-role"));
 
-// ---------- NEW: Profile Routes ----------
+// ---------- PROFILE ROUTES ----------
 app.use("/api/profile", authMiddleware, require("./api/profile"));
 
-// ---------- AI FEATURES (Existing) ----------
+// ---------- AI ROUTES ----------
 app.use("/api/ai", require("./api/ai/match"));
 app.use("/api/ai", require("./api/ai/predict"));
 
-// ---------- EMERGENCY (Existing) ----------
+// ---------- EMERGENCY ROUTES ----------
 app.use("/api/emergency", require("./api/emergency"));
 
-// ---------- INVENTORY (Existing) ----------
+// ---------- INVENTORY ROUTES ----------
 app.use("/api/inventory", require("./api/inventory"));
 
-// ---------- BLOOD REQUESTS (Existing) ----------
+// ---------- BLOOD REQUESTS ROUTES ----------
 app.use("/api/requests", require("./api/requests"));
-
-// ---------- NEW: Protected Request Routes ----------
 app.use("/api/requests/my-requests", authMiddleware, require("./api/requests"));
 app.use("/api/requests/hospital", authMiddleware, require("./api/requests"));
 app.use("/api/requests/stats/dashboard", authMiddleware, require("./api/requests"));
 
-// ---------- DONORS (Existing) ----------
+// ---------- DONOR ROUTES ----------
 app.use("/api/donors", require("./api/donors"));
-
-// ---------- NEW: Protected Donor Routes ----------
 app.use("/api/donors/profile", authMiddleware, require("./api/donors"));
 app.use("/api/donors/availability", authMiddleware, require("./api/donors"));
 app.use("/api/donors/history", authMiddleware, require("./api/donors"));
+app.use("/api/donors/stats", authMiddleware, require("./api/donors"));
+app.use("/api/donors/donate", authMiddleware, require("./api/donors"));
+app.use("/api/donors/matches", authMiddleware, require("./api/donors"));
+app.use("/api/donors/upcoming", authMiddleware, require("./api/donors"));
 
-// ---------- HOSPITALS (Existing) ----------
+// ---------- HOSPITAL ROUTES ----------
 app.use("/api/hospitals", require("./api/hospitals"));
-
-// ---------- NEW: Protected Hospital Routes ----------
 app.use("/api/hospitals/profile", authMiddleware, require("./api/hospitals"));
 app.use("/api/hospitals/inventory", authMiddleware, require("./api/hospitals"));
-app.use("/api/hospitals/requests", authMiddleware, require("./api/hospitals"));
 
-// ---------- ADMIN ROUTES (Existing) ----------
-app.use("/api/admin", require("./api/admin"));
-app.use("/api/admin/hospitals", require("./api/admin/hospitals"));
-app.use("/api/admin/reports", require("./api/admin/reports"));
-app.use("/api/admin/profile", require("./api/admin/profile"));
-
-// ---------- NEW: Admin Protected Routes ----------
+// ---------- ADMIN ROUTES ----------
+app.use("/api/admin", authMiddleware, require("./api/admin"));
 app.use("/api/admin/users", authMiddleware, require("./api/admin"));
 app.use("/api/admin/dashboard", authMiddleware, require("./api/admin"));
+app.use("/api/admin/analytics", authMiddleware, require("./api/admin"));
 app.use("/api/admin/ai-monitor", authMiddleware, require("./api/admin"));
-
-// ---------- NEW: Blood Bank Routes ----------
-app.use("/api/blood-banks", require("./api/blood-banks"));
-
-// ---------- NEW: Notification Routes ----------
-app.use("/api/notifications", authMiddleware, require("./api/notifications"));
-
-// ---------- NEW: Analytics Routes ----------
-app.use("/api/analytics", authMiddleware, require("./api/analytics"));
+app.use("/api/admin/hospitals", authMiddleware, require("./api/admin/hospitals"));
+app.use("/api/admin/reports", authMiddleware, require("./api/admin/reports"));
+app.use("/api/admin/profile", authMiddleware, require("./api/admin/profile"));
 
 // ============================================
 // CRON JOBS (Background Tasks)
@@ -199,16 +278,16 @@ cron.schedule("0 * * * *", async () => {
   try {
     console.log("🔄 Running scheduled task: Auto-update expired requests");
     const supabase = require("./supabase");
-    
+
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
+
     const { error } = await supabase
       .from("blood_requests")
       .update({ status: "expired" })
       .eq("status", "pending")
       .lt("created_at", sevenDaysAgo.toISOString());
-    
+
     if (error) {
       console.error("Cron job error:", error);
     } else {
@@ -223,52 +302,49 @@ cron.schedule("0 * * * *", async () => {
 cron.schedule("0 0 * * *", async () => {
   try {
     console.log("🔄 Running scheduled task: Blood shortage prediction");
-    // Add your prediction logic here
+    const supabase = require("./supabase");
+
+    // Get all inventory
+    const { data: inventory } = await supabase
+      .from("blood_inventory")
+      .select("blood_group, units_available");
+
+    // Get requests from last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { data: requests } = await supabase
+      .from("blood_requests")
+      .select("blood_group")
+      .gte("created_at", thirtyDaysAgo.toISOString());
+
+    if (inventory && requests) {
+      // Calculate demand per blood group
+      const demand = {};
+      requests.forEach((r) => {
+        demand[r.blood_group] = (demand[r.blood_group] || 0) + 1;
+      });
+
+      // Check for low stock
+      inventory.forEach((item) => {
+        const monthlyDemand = demand[item.blood_group] || 0;
+        const daysLeft =
+          monthlyDemand > 0
+            ? Math.round((item.units_available / monthlyDemand) * 30)
+            : 999;
+
+        if (daysLeft < 7) {
+          console.log(
+            `⚠️ CRITICAL: ${item.blood_group} stock will run out in ${daysLeft} days`
+          );
+        }
+      });
+    }
+
     console.log("✅ Blood shortage prediction completed");
   } catch (error) {
     console.error("Prediction cron error:", error);
   }
-});
-
-// ============================================
-// ROOT ROUTE
-// ============================================
-
-app.get("/", (req, res) => {
-  res.json({
-    name: "Blood Donation API",
-    version: "1.0.0",
-    status: "running",
-    documentation: "/health",
-    endpoints: {
-      auth: "/api/auth",
-      profile: "/api/profile",
-      requests: "/api/requests",
-      "my-requests": "/api/requests/my-requests",
-      "hospital-requests": "/api/requests/hospital",
-      donors: "/api/donors",
-      "donor-profile": "/api/donors/profile",
-      hospitals: "/api/hospitals",
-      "hospital-profile": "/api/hospitals/profile",
-      inventory: "/api/inventory",
-      "blood-banks": "/api/blood-banks",
-      emergency: "/api/emergency",
-      ai: {
-        match: "/api/ai/match",
-        predict: "/api/ai/predict",
-      },
-      admin: {
-        dashboard: "/api/admin/dashboard",
-        users: "/api/admin/users",
-        hospitals: "/api/admin/hospitals",
-        reports: "/api/admin/reports",
-        "ai-monitor": "/api/admin/ai-monitor",
-      },
-      notifications: "/api/notifications",
-      analytics: "/api/analytics",
-    },
-    timestamp: new Date().toISOString(),
-  });
 });
 
 // ============================================
@@ -321,6 +397,7 @@ const server = app.listen(PORT, () => {
   console.log(`❤️  Health: http://localhost:${PORT}/health`);
   console.log(`🔍 Detailed: http://localhost:${PORT}/health/detailed`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
+  console.log(`📦 Node Version: ${process.version}`);
   console.log(`🕐 Started: ${new Date().toISOString()}`);
   console.log(`=================================\n`);
 });
