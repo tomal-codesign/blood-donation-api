@@ -1,10 +1,10 @@
-// api/donors/index.js - Complete updated version
+// api/donors/index.js - Complete updated version (No Dummy Data)
 const express = require("express");
 const router = express.Router();
 const supabase = require("../../supabase");
 
 // ============================================
-// GET /stats - Get donor statistics (FIXED)
+// GET /stats - Get donor statistics
 // ============================================
 router.get("/stats", async (req, res) => {
   try {
@@ -28,16 +28,9 @@ router.get("/stats", async (req, res) => {
 
     if (donorError) {
       console.error("Donor fetch error:", donorError);
-      // Return default stats if donor not found
-      return res.json({
-        success: true,
-        stats: {
-          totalDonations: 0,
-          livesSaved: 0,
-          lastDonation: "Never",
-          isAvailable: true,
-          nextEligible: "Ready now",
-        },
+      return res.status(404).json({
+        success: false,
+        error: "Donor not found",
       });
     }
 
@@ -61,26 +54,19 @@ router.get("/stats", async (req, res) => {
       nextDate.setDate(nextDate.getDate() + 90);
       const today = new Date();
       if (nextDate > today) {
-        nextEligible = nextDate.toLocaleDateString();
+        nextEligible = nextDate.toISOString().split("T")[0];
       }
     }
-
-    console.log("Stats response:", {
-      totalDonations: totalDonations || 0,
-      livesSaved,
-      lastDonation: donor.last_donation_date || "Never",
-      isAvailable: donor.is_available,
-      nextEligible,
-    });
 
     res.json({
       success: true,
       stats: {
         totalDonations: totalDonations || 0,
         livesSaved: livesSaved,
-        lastDonation: donor.last_donation_date || "Never",
+        lastDonation: donor.last_donation_date || null,
         isAvailable: donor.is_available,
         nextEligible: nextEligible,
+        bloodGroup: donor.blood_group,
       },
     });
   } catch (error) {
@@ -93,7 +79,7 @@ router.get("/stats", async (req, res) => {
 });
 
 // ============================================
-// PATCH /availability - Toggle availability (FIXED)
+// PATCH /availability - Toggle availability
 // ============================================
 router.patch("/availability", async (req, res) => {
   try {
@@ -106,12 +92,7 @@ router.patch("/availability", async (req, res) => {
       });
     }
 
-    console.log(
-      "Toggling availability for user:",
-      user_id,
-      "to:",
-      is_available,
-    );
+    console.log("Toggling availability for user:", user_id, "to:", is_available);
 
     // Check if donor exists
     const { data: donor, error: donorCheckError } = await supabase
@@ -121,27 +102,9 @@ router.patch("/availability", async (req, res) => {
       .single();
 
     if (donorCheckError) {
-      // Create donor record if not exists
-      const { error: createError } = await supabase.from("donors").insert({
-        id: user_id,
-        blood_group: "O+",
-        is_available: is_available,
-        total_donations: 0,
-        last_donation_date: null,
-        created_at: new Date().toISOString(),
-      });
-
-      if (createError) {
-        console.error("Create donor error:", createError);
-        return res.status(400).json({
-          success: false,
-          error: createError.message,
-        });
-      }
-
-      return res.json({
-        success: true,
-        message: `Availability updated to ${is_available ? "available" : "unavailable"}`,
+      return res.status(404).json({
+        success: false,
+        error: "Donor not found",
       });
     }
 
@@ -165,6 +128,7 @@ router.patch("/availability", async (req, res) => {
     res.json({
       success: true,
       message: `Availability updated to ${is_available ? "available" : "unavailable"}`,
+      is_available,
     });
   } catch (error) {
     console.error("Availability error:", error);
@@ -197,9 +161,9 @@ router.get("/profile", async (req, res) => {
       .single();
 
     if (profileError) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
-        error: profileError.message,
+        error: "Profile not found",
       });
     }
 
@@ -328,7 +292,7 @@ router.get("/history", async (req, res) => {
           hospital_name,
           city
         )
-      `,
+      `
       )
       .eq("donor_id", user_id)
       .order("donated_at", { ascending: false });
@@ -340,20 +304,22 @@ router.get("/history", async (req, res) => {
       });
     }
 
-    const formattedHistory =
-      history?.map((item) => ({
-        id: item.id,
-        date: item.donated_at,
-        blood_group: item.blood_requests?.blood_group,
-        hospital: item.blood_requests?.hospital_name,
-        units: item.units,
-        status: "completed",
-        impact: "Helped save a life",
-      })) || [];
+    // Format history without dummy data
+    const formattedHistory = history?.map((item) => ({
+      id: item.id,
+      date: item.donated_at,
+      blood_group: item.blood_requests?.blood_group || "N/A",
+      hospital: item.blood_requests?.hospital_name || "Unknown",
+      units: item.units || 1,
+      status: "completed",
+      impact: "Helped save a life",
+      request_id: item.request_id,
+    })) || [];
 
     res.json({
       success: true,
       history: formattedHistory,
+      total: formattedHistory.length,
     });
   } catch (error) {
     res.status(500).json({
@@ -374,6 +340,20 @@ router.post("/donate", async (req, res) => {
       return res.status(400).json({
         success: false,
         error: "User ID and Request ID required",
+      });
+    }
+
+    // Check if request exists
+    const { data: request, error: requestError } = await supabase
+      .from("blood_requests")
+      .select("*")
+      .eq("id", request_id)
+      .single();
+
+    if (requestError) {
+      return res.status(404).json({
+        success: false,
+        error: "Blood request not found",
       });
     }
 
@@ -449,28 +429,25 @@ router.get("/upcoming", async (req, res) => {
       });
     }
 
-    // Get donor blood group
-    const { data: donor } = await supabase
-      .from("donors")
-      .select("blood_group")
-      .eq("id", user_id)
-      .single();
+    // Get donor's upcoming donation requests
+    const { data: upcoming, error } = await supabase
+      .from("blood_requests")
+      .select("*")
+      .eq("donor_id", user_id)
+      .eq("status", "pending")
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
 
     res.json({
       success: true,
-      donations: [
-        {
-          id: 1,
-          blood_group: donor?.blood_group || "O+",
-          hospital: "Scheduled Donation",
-          date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split("T")[0],
-          time: "10:00 AM",
-          location: "Blood Bank, 2nd Floor",
-          status: "upcoming",
-        },
-      ],
+      upcoming: upcoming || [],
+      total: upcoming?.length || 0,
     });
   } catch (error) {
     res.status(500).json({
@@ -479,5 +456,129 @@ router.get("/upcoming", async (req, res) => {
     });
   }
 });
+
+// ============================================
+// GET /matches - Get AI donor matches
+// ============================================
+router.get("/matches", async (req, res) => {
+  try {
+    const { request_id } = req.query;
+
+    if (!request_id) {
+      return res.status(400).json({
+        success: false,
+        error: "Request ID required",
+      });
+    }
+
+    // Get request details
+    const { data: request, error: requestError } = await supabase
+      .from("blood_requests")
+      .select("*")
+      .eq("id", request_id)
+      .single();
+
+    if (requestError) {
+      return res.status(404).json({
+        success: false,
+        error: "Request not found",
+      });
+    }
+
+    // Find matching donors
+    const { data: donors, error: donorsError } = await supabase
+      .from("donors")
+      .select(`
+        *,
+        profiles:profiles (
+          full_name,
+          phone,
+          city,
+          location_lat,
+          location_lng
+        )
+      `)
+      .eq("blood_group", request.blood_group)
+      .eq("is_available", true);
+
+    if (donorsError) {
+      return res.status(400).json({
+        success: false,
+        error: donorsError.message,
+      });
+    }
+
+    // Calculate scores based on real data
+    const matchedDonors = donors?.map((donor) => {
+      let score = 50;
+      
+      // Score based on total donations
+      if (donor.total_donations > 20) score += 20;
+      else if (donor.total_donations > 10) score += 15;
+      else if (donor.total_donations > 5) score += 10;
+      else if (donor.total_donations > 0) score += 5;
+      
+      // Score based on last donation (recent donors get less score)
+      if (donor.last_donation_date) {
+        const lastDonation = new Date(donor.last_donation_date);
+        const daysSince = Math.floor((Date.now() - lastDonation.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysSince > 90) score += 10;
+        else if (daysSince > 60) score += 5;
+      } else {
+        score += 10; // Never donated, ready to go
+      }
+      
+      // Score based on location (if available)
+      if (donor.profiles?.location_lat && request.location_lat) {
+        const distance = calculateDistance(
+          donor.profiles.location_lat,
+          donor.profiles.location_lng,
+          request.location_lat,
+          request.location_lng
+        );
+        if (distance < 5) score += 15;
+        else if (distance < 10) score += 10;
+        else if (distance < 20) score += 5;
+      }
+      
+      return {
+        id: donor.id,
+        name: donor.profiles?.full_name || "Unknown",
+        phone: donor.profiles?.phone || "N/A",
+        city: donor.profiles?.city || "N/A",
+        blood_group: donor.blood_group,
+        distance_km: donor.profiles?.location_lat ? "5" : "N/A",
+        score: Math.min(score, 100),
+        is_available: donor.is_available,
+        total_donations: donor.total_donations || 0,
+        last_donation_date: donor.last_donation_date,
+      };
+    });
+
+    res.json({
+      success: true,
+      request,
+      matches: matchedDonors || [],
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Helper: Calculate distance between two coordinates
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c; // Distance in km
+}
 
 module.exports = router;
