@@ -39,7 +39,7 @@ router.post('/match', async (req, res) => {
     // Fetch available donors
     const { data: donors, error } = await supabase
       .from('donors')
-      .select('*, profiles:id(full_name, phone, city, location_lat, location_lng)')
+      .select('*, profiles:profiles(full_name, phone, city, location_lat, location_lng)')
       .eq('is_available', true);
 
     if (error) return res.status(400).json({ error: error.message });
