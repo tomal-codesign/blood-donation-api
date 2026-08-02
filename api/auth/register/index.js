@@ -52,17 +52,18 @@ const validateBloodGroup = (bloodGroup) => {
   return validGroups.includes(bloodGroup);
 };
 
+const validCities = [
+  "Dhaka", "Chittagong", "Khulna", "Rajshahi",
+  "Sylhet", "Barishal", "Rangpur", "Mymensingh"
+];
+
 const validateCity = (city) => {
-  const validCities = [
-    "Dhaka", "Chittagong", "Khulna", "Rajshahi", 
-    "Sylhet", "Barishal", "Rangpur", "Mymensingh"
-  ];
   return validCities.includes(city);
 };
 
 router.post("/register", async (req, res) => {
   try {
-    const { email, password, full_name, phone, role, city, blood_group, address, registration_number, blood_bank_license } = req.body;
+    const { email, password, full_name, phone, role, city, district, blood_group, address, registration_number, blood_bank_license } = req.body;
 
     // ============================================
     // 1. REQUIRED FIELDS VALIDATION
@@ -192,6 +193,7 @@ router.post("/register", async (req, res) => {
         phone,
         role,
         city,
+        district: district || null,
         blood_group: blood_group || null,
       },
     });
@@ -231,6 +233,7 @@ router.post("/register", async (req, res) => {
       phone,
       role,
       city,
+      district: district || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
