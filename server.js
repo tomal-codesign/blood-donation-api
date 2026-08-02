@@ -205,6 +205,10 @@ app.get("/", (req, res) => {
         get: "GET /api/profile",
         update: "PUT /api/profile",
       },
+      divisions: {
+        all: "GET /api/divisions",
+        districts: "GET /api/divisions/:divisionName/districts",
+      },
       health: {
         basic: "GET /health",
         detailed: "GET /health/detailed",
@@ -227,6 +231,9 @@ app.use("/api/auth", authMiddleware, require("./api/auth/add-role"));
 
 // ---------- PROFILE ROUTES ----------
 app.use("/api/profile", authMiddleware, require("./api/profile"));
+
+// ---------- DIVISIONS / DISTRICTS ROUTES ----------
+app.use("/api/divisions", require("./api/divisions"));
 
 // ---------- AI ROUTES ----------
 app.use("/api/ai", require("./api/ai/match"));
