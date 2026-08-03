@@ -22,7 +22,7 @@ router.get("/my-requests", authMiddleware, async (req, res) => {
 
     const { data, error } = await supabase
       .from("blood_requests")
-      .select("*, profiles:requester_id(full_name, phone, city)")
+.select("*, profiles:requester_id(full_name, phone, division, district)")
       .eq("requester_id", userId)
       .order("created_at", { ascending: false });
 
@@ -61,7 +61,7 @@ router.get("/hospital", authMiddleware, async (req, res) => {
 
     const { data, error } = await supabase
       .from("blood_requests")
-      .select("*, profiles:requester_id(full_name, phone, city)")
+.select("*, profiles:requester_id(full_name, phone)")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -139,7 +139,7 @@ router.get("/blood-group/:bloodGroup", authMiddleware, async (req, res) => {
 
     let query = supabase
       .from("blood_requests")
-      .select("*, profiles:requester_id(full_name, phone, city)")
+.select("*, profiles:requester_id(full_name, phone)")
       .eq("blood_group", bloodGroup)
       .order("created_at", { ascending: false });
 
@@ -186,11 +186,11 @@ router.get("/", async (req, res) => {
 
     let query = supabase
       .from("blood_requests")
-      .select("*, profiles:requester_id(full_name, phone, city, email)")
+.select("id, requester_id, blood_group, units_needed, priority, status, hospital_name, location_lat, location_lng, patient_condition, contact_phone, created_at, updated_at, profiles:requester_id(full_name, phone, division, district, email)")
       .order("created_at", { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
-    if (city) query = query.eq("city", city);
+/* city filter removed */
     if (blood_group) query = query.eq("blood_group", blood_group);
     if (status) query = query.eq("status", status);
     if (priority) query = query.eq("priority", priority);
@@ -224,7 +224,7 @@ router.get("/:id", async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("blood_requests")
-      .select("*, profiles:requester_id(full_name, phone, city, email)")
+.select("id, requester_id, blood_group, units_needed, priority, status, hospital_name, location_lat, location_lng, patient_condition, contact_phone, created_at, updated_at, profiles:requester_id(full_name, phone, division, district, email)")
       .eq("id", req.params.id)
       .single();
 
@@ -257,14 +257,15 @@ router.get("/:id", async (req, res) => {
 // ========== CREATE BLOOD REQUEST ==========
 router.post("/", async (req, res) => {
   try {
-    const {
+const {
       requester_id,
       blood_group,
       units_needed,
       hospital_name,
       location_lat,
       location_lng,
-      city,
+      division,
+      district,
       patient_condition,
       contact_phone,
     } = req.body;
@@ -291,14 +292,15 @@ router.post("/", async (req, res) => {
 
     const { data, error } = await supabase
       .from("blood_requests")
-      .insert({
+.insert({
         requester_id,
         blood_group,
         units_needed,
         hospital_name,
         location_lat: location_lat || 23.8103,
         location_lng: location_lng || 90.4125,
-        city,
+        division,
+        district,
         patient_condition,
         contact_phone,
         priority,
