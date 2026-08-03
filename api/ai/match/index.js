@@ -17,20 +17,20 @@ function getDistance(lat1, lng1, lat2, lng2) {
 
 // Blood group compatibility matrix
 const compatible = {
-  'O-': ['O-', 'O+', 'A-', 'A+', 'B-', 'B+', 'AB-', 'AB+'],
-  'O+': ['O+', 'A+', 'B+', 'AB+'],
-  'A-': ['A-', 'A+', 'AB-', 'AB+'],
-  'A+': ['A+', 'AB+'],
-  'B-': ['B-', 'B+', 'AB-', 'AB+'],
-  'B+': ['B+', 'AB+'],
-  'AB-': ['AB-', 'AB+'],
+  'O-': ['O-'],
+  'O+': ['O+'],
+  'A-': ['A-'],
+  'A+': ['A+'],
+  'B-': ['B-'],
+  'B+': ['B+'],
+  'AB-': ['AB-'],
   'AB+': ['AB+'],
 };
 
 // AI Matching Algorithm
 router.post('/match', async (req, res) => {
   try {
-    const { blood_group, location_lat, location_lng, city, district, units_needed } = req.body;
+const { blood_group, location_lat, location_lng, division, district, units_needed } = req.body;
 
     if (!blood_group || !location_lat || !location_lng) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -39,7 +39,7 @@ router.post('/match', async (req, res) => {
     // Fetch available donors
     const { data: donors, error } = await supabase
       .from('donors')
-      .select('*, profiles:profiles(full_name, phone, city, district, location_lat, location_lng)')
+.select('*, profiles:profiles(full_name, phone, division, district, location_lat, location_lng)')
       .eq('is_available', true);
 
     if (error) return res.status(400).json({ error: error.message });
@@ -56,8 +56,8 @@ router.post('/match', async (req, res) => {
         if (!profile || !eligibleGroups.includes(d.blood_group)) return false;
 
         // Restrict to the searched division, and district if one was given
-        if (city && profile.city?.toLowerCase() !== city.toLowerCase()) return false;
-        if (district && profile.district?.toLowerCase() !== district.toLowerCase()) return false;
+if (division && profile.division?.toLowerCase() !== division.toLowerCase()) return false;
+         if (district && profile.district?.toLowerCase() !== district.toLowerCase()) return false;
 
         // Check last donation eligibility (minimum 90 days)
         const lastDonation = d.last_donation_date
@@ -99,8 +99,8 @@ router.post('/match', async (req, res) => {
           donor_id: d.id,
           name: profile.full_name,
           phone: profile.phone,
-          city: profile.city,
-          district: profile.district,
+division: profile.division,
+           district: profile.district,
           blood_group: d.blood_group,
           distance_km: distance.toFixed(2),
           score: Math.round(score),
@@ -116,7 +116,7 @@ router.post('/match', async (req, res) => {
       requested_blood_group: blood_group,
       matches_found: scored.length,
       matches: scored,
-      search_location: { lat: location_lat, lng: location_lng, city },
+search_location: { lat: location_lat, lng: location_lng, division },
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
