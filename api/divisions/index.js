@@ -4,6 +4,31 @@ const router = express.Router();
 const supabase = require('../../supabase');
 
 // ============================================
+// GET /debug - Debug endpoint to check database connection
+// ============================================
+router.get('/debug', async (req, res) => {
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL || 'NOT SET';
+    const projectRef = supabaseUrl.replace('https://', '').replace('.supabase.co', '');
+
+    const { data, error } = await supabase
+      .from('divisions')
+      .select('id, name');
+
+    res.json({
+      success: true,
+      supabase_project_ref: projectRef,
+      supabase_url: supabaseUrl,
+      divisions_count: data ? data.length : 0,
+      query_error: error ? error.message : null,
+      divisions: data || [],
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
 // GET / - List all divisions
 // ============================================
 router.get('/', async (req, res) => {
