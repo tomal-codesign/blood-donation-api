@@ -427,6 +427,155 @@ router.post("/donate", async (req, res) => {
 });
 
 // ============================================
+// POST /request-donation - Send a targeted donation request to a specific donor
+// Creates a blood request assigned to the donor (appears in their upcoming list)
+// ============================================
+router.post("/request-donation", async (req, res) => {
+  try {
+    const {
+      requester_id,
+      donor_id,
+      blood_group,
+      units_needed,
+      hospital_name,
+      location_lat,
+      location_lng,
+      division,
+      district,
+      patient_condition,
+      contact_phone,
+    } = req.body;
+
+    // Validate required fields
+    if (!requester_id) {
+      return res.status(400).json({
+        success: false,
+        error: "Requester ID required",
+      });
+    }
+    if (!donor_id) {
+      return res.status(400).json({
+        success: false,
+        error: "Donor ID required",
+      });
+    }
+    if (!blood_group) {
+      return res.status(400).json({
+        success: false,
+        error: "Blood group required",
+      });
+    }
+    if (!hospital_name) {
+      return res.status(400).json({
+        success: false,
+        error: "Hospital name required",
+      });
+    }
+
+    // Verify the donor exists and is eligible
+    const { data: donor, error: donorError } = await supabase
+      .from("donors")
+      .select("id, blood_group, is_available, last_donation_date")
+      .eq("id", donor_id)
+      .single();
+
+    if (donorError || !donor) {
+      return res.status(404).json({
+        success: false,
+        error: "Donor not found",
+      });
+    }
+
+    // Check blood group compatibility (donor must be able to donate the requested group)
+    const compatibleGroups = {
+      'A+': ['A+', 'A-', 'O+', 'O-'],
+      'A-': ['A-', 'O-'],
+      'B+': ['B+', 'B-', 'O+', 'O-'],
+      'B-': ['B-', 'O-'],
+      'AB+': ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
+      'AB-': ['A-', 'B-', 'AB-', 'O-'],
+      'O+': ['O+', 'O-'],
+      'O-': ['O-'],
+    };
+
+    if (!compatibleGroups[donor.blood_group]?.includes(blood_group)) {
+      return res.status(400).json({
+        success: false,
+        error: `Donor with blood group ${donor.blood_group} cannot donate ${blood_group}`,
+      });
+    }
+
+    // Check 90-day eligibility
+    if (donor.last_donation_date) {
+      const lastDonation = new Date(donor.last_donation_date);
+      const daysSince = Math.floor((Date.now() - lastDonation.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSince < 90) {
+        return res.status(400).json({
+          success: false,
+          error: `Donor is not eligible yet. Last donation was ${daysSince} days ago (minimum 90 days required).`,
+        });
+      }
+    }
+
+    // Set priority based on units_needed or condition
+    let priority = "normal";
+    if (
+      units_needed >= 4 ||
+      patient_condition?.toLowerCase().includes("accident") ||
+      patient_condition?.toLowerCase().includes("surgery") ||
+      patient_condition?.toLowerCase().includes("emergency")
+    ) {
+      priority = "critical";
+    } else if (units_needed >= 2) {
+      priority = "moderate";
+    }
+
+    // Create the targeted blood request assigned to this donor
+    const { data: request, error: requestError } = await supabase
+      .from("blood_requests")
+      .insert({
+        requester_id,
+        donor_id,
+        blood_group,
+        units_needed: units_needed || 1,
+        hospital_name,
+        location_lat: location_lat || 23.8103,
+        location_lng: location_lng || 90.4125,
+        division,
+        district,
+        patient_condition,
+        contact_phone,
+        priority,
+        status: "pending",
+      })
+      .select("*")
+      .single();
+
+    if (requestError) {
+      console.error("Create donation request error:", requestError);
+      return res.status(400).json({
+        success: false,
+        error: requestError.message,
+      });
+    }
+
+    console.log(`✅ Donation request sent to donor ${donor_id} for blood ${blood_group}`);
+
+    res.status(201).json({
+      success: true,
+      message: `Donation request sent to donor. They will be notified.`,
+      request,
+    });
+  } catch (error) {
+    console.error("Request donation error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// ============================================
 // GET /upcoming - Get upcoming donations
 // ============================================
 router.get("/upcoming", async (req, res) => {
@@ -443,7 +592,7 @@ router.get("/upcoming", async (req, res) => {
     // Get donor's upcoming donation requests
     const { data: upcoming, error } = await supabase
       .from("blood_requests")
-      .select("*")
+      .select("*, profiles:requester_id(full_name, phone, division, district)")
       .eq("donor_id", user_id)
       .eq("status", "pending")
       .order("created_at", { ascending: true });

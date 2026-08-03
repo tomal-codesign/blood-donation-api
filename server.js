@@ -260,6 +260,7 @@ app.use("/api/donors/stats", authMiddleware, require("./api/donors"));
 app.use("/api/donors/donate", authMiddleware, require("./api/donors"));
 app.use("/api/donors/matches", authMiddleware, require("./api/donors"));
 app.use("/api/donors/upcoming", authMiddleware, require("./api/donors"));
+app.use("/api/donors/request-donation", authMiddleware, require("./api/donors"));
 
 // ---------- HOSPITAL ROUTES ----------
 app.use("/api/hospitals", require("./api/hospitals"));
