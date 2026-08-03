@@ -76,7 +76,6 @@ router.put('/', async (req, res) => {
 const {
   full_name,
   phone,
-  city,
   address,
   location_lat,
   location_lng,
@@ -91,7 +90,6 @@ const {
 const profileUpdates = {
   full_name,
   phone,
-  city,
   address,
   location_lat,
   location_lng,
