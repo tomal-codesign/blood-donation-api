@@ -199,17 +199,18 @@ router.get("/profile", async (req, res) => {
 // ============================================
 router.put("/profile", async (req, res) => {
   try {
-    const {
-      user_id,
-      full_name,
-      phone,
-      city,
-      location_lat,
-      location_lng,
-      blood_group,
-      weight,
-      medical_conditions,
-    } = req.body;
+const {
+  user_id,
+  full_name,
+  phone,
+  location_lat,
+  location_lng,
+  blood_group,
+  weight,
+  medical_conditions,
+  division,
+  district,
+} = req.body;
 
     if (!user_id) {
       return res.status(400).json({
@@ -219,16 +220,26 @@ router.put("/profile", async (req, res) => {
     }
 
     // Update profile
+const profileUpdates = {
+  full_name,
+  phone,
+  location_lat,
+  location_lng,
+  division,
+  district,
+  updated_at: new Date().toISOString(),
+};
+
+    // Remove undefined fields
+    Object.keys(profileUpdates).forEach(key => {
+      if (profileUpdates[key] === undefined) {
+        delete profileUpdates[key];
+      }
+    });
+
     const { error: profileError } = await supabase
       .from("profiles")
-      .update({
-        full_name,
-        phone,
-        city,
-        location_lat,
-        location_lng,
-        updated_at: new Date().toISOString(),
-      })
+      .update(profileUpdates)
       .eq("id", user_id);
 
     if (profileError) {

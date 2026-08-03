@@ -73,28 +73,30 @@ router.put('/', async (req, res) => {
       });
     }
 
-    const {
-      full_name,
-      phone,
-      city,
-      address,
-      location_lat,
-      location_lng,
-      blood_group,
-      weight,
-      medical_conditions
-    } = req.body;
+const {
+  full_name,
+  phone,
+  address,
+  location_lat,
+  location_lng,
+  blood_group,
+  weight,
+  medical_conditions,
+  division,
+  district
+} = req.body;
 
     // Update profile
-    const profileUpdates = {
-      full_name,
-      phone,
-      city,
-      address,
-      location_lat,
-      location_lng,
-      updated_at: new Date().toISOString()
-    };
+const profileUpdates = {
+  full_name,
+  phone,
+  address,
+  location_lat,
+  location_lng,
+  division,
+  district,
+  updated_at: new Date().toISOString()
+};
 
     // Remove undefined fields
     Object.keys(profileUpdates).forEach(key => {

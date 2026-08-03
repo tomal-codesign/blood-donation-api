@@ -61,9 +61,11 @@ const validateCity = (city) => {
   return validCities.includes(city);
 };
 
+
+
 router.post("/register", async (req, res) => {
   try {
-    const { email, password, full_name, phone, role, city, district, blood_group, address, registration_number, blood_bank_license } = req.body;
+const { email, password, full_name, phone, role, division, district, blood_group, address, registration_number, blood_bank_license } = req.body;
 
     // ============================================
     // 1. REQUIRED FIELDS VALIDATION
@@ -75,7 +77,7 @@ router.post("/register", async (req, res) => {
     if (!full_name) errors.push("Full name is required");
     if (!phone) errors.push("Phone number is required");
     if (!role) errors.push("Role is required");
-    if (!city) errors.push("City is required");
+if (!division) errors.push("Division is required");
 
     if (errors.length > 0) {
       return res.status(400).json({
@@ -126,15 +128,6 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    // ============================================
-    // 6. CITY VALIDATION
-    // ============================================
-    if (!validateCity(city)) {
-      return res.status(400).json({
-        error: "Invalid city",
-        details: `City must be one of: ${validCities.join(", ")}`,
-      });
-    }
 
     // ============================================
     // 7. BLOOD GROUP VALIDATION (for donors)
@@ -188,11 +181,11 @@ router.post("/register", async (req, res) => {
       email,
       password,
       email_confirm: true,
-      user_metadata: {
+user_metadata: {
         full_name,
         phone,
         role,
-        city,
+        division,
         district: district || null,
         blood_group: blood_group || null,
       },
@@ -226,13 +219,13 @@ router.post("/register", async (req, res) => {
     // ============================================
     // 11. INSERT INTO PROFILES TABLE
     // ============================================
-    const profileData = {
+const profileData = {
       id: authData.user.id,
       email: email,
       full_name,
       phone,
       role,
-      city,
+      division,
       district: district || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
