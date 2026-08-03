@@ -68,7 +68,7 @@ router.get('/', async (req, res) => {
 // ============================================
 router.put('/', async (req, res) => {
   try {
-    const { user_id, full_name, phone, city } = req.body;
+    const { user_id, full_name, phone, division, district } = req.body;
     const authHeader = req.headers.authorization;
     
     if (!authHeader) {
@@ -105,15 +105,16 @@ router.put('/', async (req, res) => {
     }
 
     // Update profile
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({
-        full_name,
-        phone,
-        city,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', user_id);
+     const { error: updateError } = await supabase
+       .from('profiles')
+       .update({
+         full_name,
+         phone,
+         division,
+         district,
+         updated_at: new Date().toISOString()
+       })
+       .eq('id', user_id);
 
     if (updateError) {
       return res.status(400).json({ 
