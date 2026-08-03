@@ -31,21 +31,22 @@ router.get('/profile', async (req, res) => {
 // PUT - Update Hospital Profile
 router.put('/profile', async (req, res) => {
   try {
-    const { user_id, full_name, phone, city } = req.body;
+    const { user_id, full_name, phone, division, district } = req.body;
 
     if (!user_id) {
       return res.status(400).json({ error: 'User ID required' });
     }
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        full_name,
-        phone,
-        city,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', user_id);
+     const { error } = await supabase
+       .from('profiles')
+       .update({
+         full_name,
+         phone,
+         division,
+         district,
+         updated_at: new Date().toISOString()
+       })
+       .eq('id', user_id);
 
     if (error) {
       return res.status(400).json({ error: error.message });
@@ -116,7 +117,8 @@ router.get('/donation-history/:hospitalId', async (req, res) => {
             full_name,
             email,
             phone,
-            city
+            division,
+            district
           )
         )
       `)
@@ -138,7 +140,8 @@ router.get('/donation-history/:hospitalId', async (req, res) => {
           full_name: item.donors?.profiles?.full_name,
           email: item.donors?.profiles?.email,
           phone: item.donors?.profiles?.phone,
-          city: item.donors?.profiles?.city,
+          district: item.donors?.profiles?.district,
+          division: item.donors?.profiles?.division,
           blood_group: item.donors?.blood_group,
           is_available: item.donors?.is_available,
           total_donations: item.donors?.total_donations,
@@ -237,7 +240,8 @@ router.get('/donors/:hospitalId', async (req, res) => {
           full_name,
           email,
           phone,
-          city
+          division,
+          district
         )
       `)
       .in('id', donorIds);
@@ -255,21 +259,22 @@ router.get('/donors/:hospitalId', async (req, res) => {
     });
 
     // Format the response
-    var formattedDonors = donors?.map(function(d) {
-      return {
-        id: d.id,
-        full_name: d.profiles?.full_name,
-        email: d.profiles?.email,
-        phone: d.profiles?.phone,
-        city: d.profiles?.city,
-        blood_group: d.blood_group,
-        is_available: d.is_available,
-        total_donations: d.total_donations,
-        last_donation_date: d.last_donation_date,
-        donation_count: donationCounts[d.id] || 0,
-        donated_to_hospital: true
-      };
-    }) || [];
+        var formattedDonors = donors?.map(function(d) {
+          return {
+            id: d.id,
+            full_name: d.profiles?.full_name,
+            email: d.profiles?.email,
+            phone: d.profiles?.phone,
+            district: d.profiles?.district,
+            division: d.profiles?.division,
+            blood_group: d.blood_group,
+            is_available: d.is_available,
+            total_donations: d.total_donations,
+            last_donation_date: d.last_donation_date,
+            donation_count: donationCounts[d.id] || 0,
+            donated_to_hospital: true
+          };
+        }) || [];
 
     res.json({
       success: true,
