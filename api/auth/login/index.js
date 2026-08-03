@@ -41,15 +41,18 @@ router.post("/login", async (req, res) => {
       console.error("❌ Profile fetch error:", profileError);
 
       // Try to create profile if it doesn't exist
-      const { error: insertError } = await supabase.from("profiles").insert({
-        id: data.user.id,
-        email: data.user.email,
-        full_name: data.user.user_metadata?.full_name || data.user.email,
-        phone: data.user.user_metadata?.phone || "",
-        role: data.user.user_metadata?.role || "donor",
-        city: data.user.user_metadata?.city || "",
-        created_at: new Date().toISOString(),
-      });
+       const { error: insertError } = await supabase.from("profiles").insert({
+         id: data.user.id,
+         email: data.user.email,
+         full_name: data.user.user_metadata?.full_name || data.user.email,
+         phone: data.user.user_metadata?.phone || "",
+         role: data.user.user_metadata?.role || "donor",
+         division: data.user.user_metadata?.division || "",
+         district: data.user.user_metadata?.district || "",
+         location_lat: data.user.user_metadata?.location_lat || 23.8103,
+         location_lng: data.user.user_metadata?.location_lng || 90.4125,
+         created_at: new Date().toISOString(),
+       });
 
       if (insertError) {
         console.error("❌ Profile creation failed:", insertError);
@@ -116,23 +119,24 @@ router.post("/login", async (req, res) => {
         donorInfo = donor;
       }
 
-      const userResponse = {
-        id: data.user.id,
-        email: data.user.email,
-        roles: roles,
-        currentRole: currentRole,
-        full_name: newProfile.full_name,
-        phone: newProfile.phone,
-        city: newProfile.city,
-        location_lat: newProfile.location_lat,
-        location_lng: newProfile.location_lng,
-        ...(donorInfo && {
-          blood_group: donorInfo.blood_group,
-          is_available: donorInfo.is_available,
-          total_donations: donorInfo.total_donations,
-          last_donation_date: donorInfo.last_donation_date,
-        }),
-      };
+       const userResponse = {
+         id: data.user.id,
+         email: data.user.email,
+         roles: roles,
+         currentRole: currentRole,
+         full_name: newProfile.full_name,
+         phone: newProfile.phone,
+         division: newProfile.division,
+         district: newProfile.district,
+         location_lat: newProfile.location_lat,
+         location_lng: newProfile.location_lng,
+         ...(donorInfo && {
+           blood_group: donorInfo.blood_group,
+           is_available: donorInfo.is_available,
+           total_donations: donorInfo.total_donations,
+           last_donation_date: donorInfo.last_donation_date,
+         }),
+       };
 
       console.log("✅ Login successful for:", userResponse.email);
       console.log("✅ User roles:", roles);
@@ -234,23 +238,24 @@ router.post("/login", async (req, res) => {
       }
     }
 
-    const userResponse = {
-      id: data.user.id,
-      email: data.user.email,
-      roles: roles,
-      currentRole: currentRole,
-      full_name: profile.full_name,
-      phone: profile.phone,
-      city: profile.city,
-      location_lat: profile.location_lat,
-      location_lng: profile.location_lng,
-      ...(donorInfo && {
-        blood_group: donorInfo.blood_group,
-        is_available: donorInfo.is_available,
-        total_donations: donorInfo.total_donations,
-        last_donation_date: donorInfo.last_donation_date,
-      }),
-    };
+     const userResponse = {
+       id: data.user.id,
+       email: data.user.email,
+       roles: roles,
+       currentRole: currentRole,
+       full_name: profile.full_name,
+       phone: profile.phone,
+       division: profile.division,
+       district: profile.district,
+       location_lat: profile.location_lat,
+       location_lng: profile.location_lng,
+       ...(donorInfo && {
+         blood_group: donorInfo.blood_group,
+         is_available: donorInfo.is_available,
+         total_donations: donorInfo.total_donations,
+         last_donation_date: donorInfo.last_donation_date,
+       }),
+     };
 
     console.log("✅ Login successful for:", userResponse.email);
     console.log("✅ User roles:", roles);
