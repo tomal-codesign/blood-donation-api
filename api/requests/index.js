@@ -373,6 +373,38 @@ router.patch("/:id/status", async (req, res) => {
       });
     }
 
+    // Determine which donor is acting (for decline tracking):
+    // - Prefer the request's assigned donor_id
+    // - Fall back to the donor_id sent in the request body
+    const actingDonorId = existing.donor_id || req.body.donor_id;
+
+    // If a donor declines a GENERAL request (not specifically assigned to them),
+    // don't cancel the whole request — just record their decline so it disappears
+    // only for them, while remaining visible to other donors in the area.
+    if (status === "cancelled" && !existing.donor_id && actingDonorId) {
+      // Insert a decline record (unique per request + donor)
+      const { error: declineError } = await supabase
+        .from("request_declines")
+        .upsert(
+          {
+            request_id: req.params.id,
+            donor_id: actingDonorId,
+          },
+          { onConflict: "request_id,donor_id" }
+        );
+
+      if (declineError) {
+        console.error("Decline record error:", declineError);
+      }
+
+      return res.json({
+        success: true,
+        message: "Request declined. It will no longer appear in your list.",
+        data: existing,
+        declined: true,
+      });
+    }
+
     // Update status in blood_requests
     const { data, error } = await supabase
       .from("blood_requests")
@@ -439,10 +471,17 @@ router.patch("/:id/status", async (req, res) => {
         }
 
         // Update donor stats (total_donations + last_donation_date)
+        // Fetch current total first, then increment (supabase.raw is not available)
+        const { data: currentDonor } = await supabase
+          .from("donors")
+          .select("total_donations")
+          .eq("id", donatingDonorId)
+          .single();
+
         const { error: donorUpdateError } = await supabase
           .from("donors")
           .update({
-            total_donations: supabase.raw("total_donations + 1"),
+            total_donations: (currentDonor?.total_donations || 0) + 1,
             last_donation_date: new Date().toISOString().split("T")[0],
             updated_at: new Date().toISOString(),
           })
