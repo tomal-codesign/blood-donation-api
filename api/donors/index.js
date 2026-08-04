@@ -626,7 +626,10 @@ router.get("/upcoming", async (req, res) => {
       });
     }
 
-    // 2. Matching requests (same division, district, blood group) not yet assigned
+    // 2. Matching requests (same division, district, blood group).
+    //    Shows all pending requests in the donor's area with matching blood group,
+    //    including ones already assigned to a specific donor (so targeted requests
+    //    are still visible to the donor).
     let matchingRequests = [];
     if (donorDivision && donorDistrict && donorBloodGroup) {
       const { data: matches, error: matchError } = await supabase
@@ -636,7 +639,6 @@ router.get("/upcoming", async (req, res) => {
         .eq("district", donorDistrict)
         .eq("blood_group", donorBloodGroup)
         .eq("status", "pending")
-        .is("donor_id", null)
         .order("created_at", { ascending: true });
 
       if (matchError) {
