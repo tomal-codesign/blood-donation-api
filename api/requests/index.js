@@ -384,9 +384,26 @@ router.patch("/:id/status", async (req, res) => {
       });
     }
 
-    // When a request is marked as fulfilled, record the donation in donation_history
-    // and update the donor's stats so everything stays in sync
-    if (status === "fulfilled" && existing.donor_id) {
+    // Determine which donor accepted/fulfilled this request:
+    // - Prefer the request's assigned donor_id (targeted requests from find-donors)
+    // - Fall back to the donor_id sent in the request body (general requests accepted
+    //   from the donor's "My Donations" page)
+    const donatingDonorId = existing.donor_id || req.body.donor_id;
+
+    // When a request is accepted (matched) or fulfilled, record the donation in
+    // donation_history and update the donor's stats so everything stays in sync.
+    // (The duplicate check below ensures it is only recorded once per request.)
+    if ((status === "matched" || status === "fulfilled") && donatingDonorId) {
+      // If the request didn't have a donor_id yet, assign this donor to it
+      if (!existing.donor_id) {
+        await supabase
+          .from("blood_requests")
+          .update({
+            donor_id: donatingDonorId,
+          })
+          .eq("id", req.params.id);
+      }
+
       // Check if a donation_history record already exists for this request (avoid duplicates)
       const { data: existingHistory } = await supabase
         .from("donation_history")
@@ -399,7 +416,7 @@ router.patch("/:id/status", async (req, res) => {
         const { error: historyError } = await supabase
           .from("donation_history")
           .insert({
-            donor_id: existing.donor_id,
+            donor_id: donatingDonorId,
             request_id: req.params.id,
             units: existing.units_needed || 1,
             donated_at: new Date().toISOString(),
@@ -421,7 +438,7 @@ router.patch("/:id/status", async (req, res) => {
             last_donation_date: new Date().toISOString().split("T")[0],
             updated_at: new Date().toISOString(),
           })
-          .eq("id", existing.donor_id);
+          .eq("id", donatingDonorId);
 
         if (donorUpdateError) {
           console.error("Donor update error:", donorUpdateError);
