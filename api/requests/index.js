@@ -278,6 +278,14 @@ const {
       });
     }
 
+    // Validate units_needed range (min 1, max 5)
+    if (units_needed < 1 || units_needed > 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Units needed must be between 1 and 5",
+      });
+    }
+
     let priority = "normal";
     if (
       units_needed >= 4 ||
