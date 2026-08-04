@@ -373,6 +373,38 @@ router.patch("/:id/status", async (req, res) => {
       });
     }
 
+    // Determine which donor is acting (for decline tracking):
+    // - Prefer the request's assigned donor_id
+    // - Fall back to the donor_id sent in the request body
+    const actingDonorId = existing.donor_id || req.body.donor_id;
+
+    // If a donor declines a GENERAL request (not specifically assigned to them),
+    // don't cancel the whole request — just record their decline so it disappears
+    // only for them, while remaining visible to other donors in the area.
+    if (status === "cancelled" && !existing.donor_id && actingDonorId) {
+      // Insert a decline record (unique per request + donor)
+      const { error: declineError } = await supabase
+        .from("request_declines")
+        .upsert(
+          {
+            request_id: req.params.id,
+            donor_id: actingDonorId,
+          },
+          { onConflict: "request_id,donor_id" }
+        );
+
+      if (declineError) {
+        console.error("Decline record error:", declineError);
+      }
+
+      return res.json({
+        success: true,
+        message: "Request declined. It will no longer appear in your list.",
+        data: existing,
+        declined: true,
+      });
+    }
+
     // Update status in blood_requests
     const { data, error } = await supabase
       .from("blood_requests")

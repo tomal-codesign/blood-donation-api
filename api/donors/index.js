@@ -633,19 +633,37 @@ router.get("/upcoming", async (req, res) => {
       });
     }
 
+    // Get requests this donor has declined (so they stay hidden for this donor only)
+    const { data: declinedRecords, error: declinedError } = await supabase
+      .from("request_declines")
+      .select("request_id")
+      .eq("donor_id", user_id);
+
+    if (declinedError) {
+      console.error("Fetch declined requests error:", declinedError);
+    }
+    const declinedRequestIds = (declinedRecords || []).map((d) => d.request_id);
+
     // 2. Matching requests (same division, district, blood group).
     //    Shows all pending requests in the donor's area with matching blood group,
     //    including ones already assigned to a specific donor (so targeted requests
-    //    are still visible to the donor).
+    //    are still visible to the donor). Requests the donor has declined are excluded.
     let matchingRequests = [];
     if (donorDivision && donorDistrict && donorBloodGroup) {
-      const { data: matches, error: matchError } = await supabase
+      let matchQuery = supabase
         .from("blood_requests")
         .select("*, profiles:requester_id(full_name, phone, division, district)")
         .eq("division", donorDivision)
         .eq("district", donorDistrict)
         .eq("blood_group", donorBloodGroup)
-        .eq("status", "pending")
+        .eq("status", "pending");
+
+      // Exclude declined requests
+      if (declinedRequestIds.length > 0) {
+        matchQuery = matchQuery.not("id", "in", `(${declinedRequestIds.join(",")})`);
+      }
+
+      const { data: matches, error: matchError } = await matchQuery
         .order("created_at", { ascending: true });
 
       if (matchError) {
