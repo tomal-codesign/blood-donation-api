@@ -301,7 +301,8 @@ router.get("/history", async (req, res) => {
         blood_requests (
           blood_group,
           hospital_name,
-          city
+          division,
+          district
         )
       `
       )
@@ -653,7 +654,8 @@ router.get("/matches", async (req, res) => {
         profiles:profiles (
           full_name,
           phone,
-          city,
+          division,
+          district,
           location_lat,
           location_lng
         )
@@ -705,7 +707,8 @@ router.get("/matches", async (req, res) => {
         id: donor.id,
         name: donor.profiles?.full_name || "Unknown",
         phone: donor.profiles?.phone || "N/A",
-        city: donor.profiles?.city || "N/A",
+        division: donor.profiles?.division || "N/A",
+        district: donor.profiles?.district || "N/A",
         blood_group: donor.blood_group,
         distance_km: donor.profiles?.location_lat ? "5" : "N/A",
         score: Math.min(score, 100),
