@@ -351,6 +351,21 @@ router.patch("/:id/status", async (req, res) => {
       });
     }
 
+    // Get the current request first (need donor_id, units, etc. for donation_history)
+    const { data: existing, error: fetchError } = await supabase
+      .from("blood_requests")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchError) {
+      return res.status(404).json({
+        success: false,
+        message: "Request not found",
+      });
+    }
+
+    // Update status in blood_requests
     const { data, error } = await supabase
       .from("blood_requests")
       .update({
@@ -367,6 +382,51 @@ router.patch("/:id/status", async (req, res) => {
         success: false,
         message: error.message,
       });
+    }
+
+    // When a request is marked as fulfilled, record the donation in donation_history
+    // and update the donor's stats so everything stays in sync
+    if (status === "fulfilled" && existing.donor_id) {
+      // Check if a donation_history record already exists for this request (avoid duplicates)
+      const { data: existingHistory } = await supabase
+        .from("donation_history")
+        .select("id")
+        .eq("request_id", req.params.id)
+        .maybeSingle();
+
+      if (!existingHistory) {
+        // Insert into donation_history
+        const { error: historyError } = await supabase
+          .from("donation_history")
+          .insert({
+            donor_id: existing.donor_id,
+            request_id: req.params.id,
+            units: existing.units_needed || 1,
+            donated_at: new Date().toISOString(),
+          });
+
+        if (historyError) {
+          console.error("Donation history insert error:", historyError);
+          return res.status(400).json({
+            success: false,
+            message: `Request status updated, but failed to record donation history: ${historyError.message}`,
+          });
+        }
+
+        // Update donor stats (total_donations + last_donation_date)
+        const { error: donorUpdateError } = await supabase
+          .from("donors")
+          .update({
+            total_donations: supabase.raw("total_donations + 1"),
+            last_donation_date: new Date().toISOString().split("T")[0],
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existing.donor_id);
+
+        if (donorUpdateError) {
+          console.error("Donor update error:", donorUpdateError);
+        }
+      }
     }
 
     res.json({
