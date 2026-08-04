@@ -578,6 +578,9 @@ router.post("/request-donation", async (req, res) => {
 
 // ============================================
 // GET /upcoming - Get upcoming donations
+// Shows requests directly assigned to the donor,
+// plus matching requests where the donor's
+// division, district, and blood group match.
 // ============================================
 router.get("/upcoming", async (req, res) => {
   try {
@@ -590,25 +593,76 @@ router.get("/upcoming", async (req, res) => {
       });
     }
 
-    // Get donor's upcoming donation requests
-    const { data: upcoming, error } = await supabase
+    // Get the donor's profile (division, district) and blood group
+    const { data: donor, error: donorError } = await supabase
+      .from("donors")
+      .select("id, blood_group, profiles:profiles(division, district)")
+      .eq("id", user_id)
+      .single();
+
+    if (donorError) {
+      return res.status(404).json({
+        success: false,
+        error: "Donor not found",
+      });
+    }
+
+    const donorDivision = donor.profiles?.division || "";
+    const donorDistrict = donor.profiles?.district || "";
+    const donorBloodGroup = donor.blood_group || "";
+
+    // 1. Requests directly assigned to this donor
+    const { data: directRequests, error: directError } = await supabase
       .from("blood_requests")
       .select("*, profiles:requester_id(full_name, phone, division, district)")
       .eq("donor_id", user_id)
       .eq("status", "pending")
       .order("created_at", { ascending: true });
 
-    if (error) {
+    if (directError) {
       return res.status(400).json({
         success: false,
-        error: error.message,
+        error: directError.message,
       });
     }
 
+    // 2. Matching requests (same division, district, blood group) not yet assigned
+    let matchingRequests = [];
+    if (donorDivision && donorDistrict && donorBloodGroup) {
+      const { data: matches, error: matchError } = await supabase
+        .from("blood_requests")
+        .select("*, profiles:requester_id(full_name, phone, division, district)")
+        .eq("division", donorDivision)
+        .eq("district", donorDistrict)
+        .eq("blood_group", donorBloodGroup)
+        .eq("status", "pending")
+        .is("donor_id", null)
+        .order("created_at", { ascending: true });
+
+      if (matchError) {
+        return res.status(400).json({
+          success: false,
+          error: matchError.message,
+        });
+      }
+
+      matchingRequests = matches || [];
+    }
+
+    // Combine and deduplicate by request id (direct requests take priority)
+    const seen = new Set();
+    const combined = [...(directRequests || []), ...matchingRequests].filter((req) => {
+      if (seen.has(req.id)) return false;
+      seen.add(req.id);
+      return true;
+    });
+
     res.json({
       success: true,
-      upcoming: upcoming || [],
-      total: upcoming?.length || 0,
+      upcoming: combined,
+      total: combined.length,
+      direct_count: directRequests?.length || 0,
+      matching_count: matchingRequests.length,
     });
   } catch (error) {
     res.status(500).json({
