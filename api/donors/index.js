@@ -389,10 +389,17 @@ router.post("/donate", async (req, res) => {
     }
 
     // Update donor total donations and last donation date
+    // Fetch current total first, then increment (supabase.raw is not available)
+    const { data: currentDonor } = await supabase
+      .from("donors")
+      .select("total_donations")
+      .eq("id", user_id)
+      .single();
+
     const { error: updateError } = await supabase
       .from("donors")
       .update({
-        total_donations: supabase.raw("total_donations + 1"),
+        total_donations: (currentDonor?.total_donations || 0) + 1,
         last_donation_date: new Date().toISOString().split("T")[0],
         updated_at: new Date().toISOString(),
       })

@@ -439,10 +439,17 @@ router.patch("/:id/status", async (req, res) => {
         }
 
         // Update donor stats (total_donations + last_donation_date)
+        // Fetch current total first, then increment (supabase.raw is not available)
+        const { data: currentDonor } = await supabase
+          .from("donors")
+          .select("total_donations")
+          .eq("id", donatingDonorId)
+          .single();
+
         const { error: donorUpdateError } = await supabase
           .from("donors")
           .update({
-            total_donations: supabase.raw("total_donations + 1"),
+            total_donations: (currentDonor?.total_donations || 0) + 1,
             last_donation_date: new Date().toISOString().split("T")[0],
             updated_at: new Date().toISOString(),
           })
