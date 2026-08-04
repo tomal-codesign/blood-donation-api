@@ -382,19 +382,30 @@ router.patch("/:id/status", async (req, res) => {
     // don't cancel the whole request — just record their decline so it disappears
     // only for them, while remaining visible to other donors in the area.
     if (status === "cancelled" && !existing.donor_id && actingDonorId) {
-      // Insert a decline record (unique per request + donor)
-      const { error: declineError } = await supabase
+      // Check if a decline record already exists for this request + donor
+      const { data: existingDecline } = await supabase
         .from("request_declines")
-        .upsert(
-          {
+        .select("id")
+        .eq("request_id", req.params.id)
+        .eq("donor_id", actingDonorId)
+        .maybeSingle();
+
+      // Only insert if not already declined (avoids duplicates without needing a unique constraint)
+      if (!existingDecline) {
+        const { error: declineError } = await supabase
+          .from("request_declines")
+          .insert({
             request_id: req.params.id,
             donor_id: actingDonorId,
-          },
-          { onConflict: "request_id,donor_id" }
-        );
+          });
 
-      if (declineError) {
-        console.error("Decline record error:", declineError);
+        if (declineError) {
+          console.error("Decline record error:", declineError);
+          return res.status(400).json({
+            success: false,
+            message: `Failed to record decline. Please ensure the 'request_declines' table exists in your database. Error: ${declineError.message}`,
+          });
+        }
       }
 
       return res.json({
