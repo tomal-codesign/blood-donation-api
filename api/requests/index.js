@@ -268,6 +268,7 @@ const {
       district,
       patient_condition,
       contact_phone,
+      priority: bodyPriority,
     } = req.body;
 
     if (!requester_id || !blood_group || !units_needed || !hospital_name) {
@@ -286,16 +287,19 @@ const {
       });
     }
 
-    let priority = "normal";
-    if (
+    // Respect the client-provided priority (default to normal if invalid/missing)
+    const validPriorities = ["normal", "moderate", "critical"];
+    let priority = validPriorities.includes(bodyPriority) ? bodyPriority : "normal";
+
+    // Emergency conditions always override to critical (safety)
+    const isEmergency =
       units_needed >= 4 ||
       patient_condition?.toLowerCase().includes("accident") ||
       patient_condition?.toLowerCase().includes("surgery") ||
-      patient_condition?.toLowerCase().includes("emergency")
-    ) {
+      patient_condition?.toLowerCase().includes("emergency");
+
+    if (isEmergency) {
       priority = "critical";
-    } else if (units_needed >= 2) {
-      priority = "moderate";
     }
 
     const { data, error } = await supabase
