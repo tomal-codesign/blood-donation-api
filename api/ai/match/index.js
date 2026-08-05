@@ -1,3 +1,4 @@
+// blood-donation-api/api/ai/match/index.js
 const express = require('express');
 const router = express.Router();
 const supabase = require('../../../supabase');
@@ -24,39 +25,42 @@ const { blood_group, location_lat, location_lng, division, district, units_neede
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Fetch available donors with the exact blood group
-    const { data: donors, error } = await supabase
-      .from('donors')
-.select('*, profiles:profiles(full_name, phone, division, district, location_lat, location_lng)')
-      .eq('is_available', true)
-      .eq('blood_group', blood_group);
+    // Build query on profiles table (role=donor) with donor details
+    let query = supabase
+      .from('profiles')
+      .select('*, donors:donors(*)')
+      .eq('role', 'donor');
+
+    // Filter by division if provided
+    if (division) {
+      query = query.eq('division', division);
+    }
+
+    // Filter by district if provided
+    if (district) {
+      query = query.eq('district', district);
+    }
+
+    const { data: profiles, error } = await query;
 
     if (error) return res.status(400).json({ error: error.message });
 
     // Score and rank donors
-    const scored = donors
-      .filter((d) => {
-        const profile = d.profiles;
-        if (!profile) return false;
-
-        // Restrict to the searched division, and district if one was given
-if (division && profile.division?.toLowerCase() !== division.toLowerCase()) return false;
-         if (district && profile.district?.toLowerCase() !== district.toLowerCase()) return false;
-
-        // Check last donation eligibility (minimum 90 days)
-        const lastDonation = d.last_donation_date
-          ? (Date.now() - new Date(d.last_donation_date).getTime()) / (1000 * 60 * 60 * 24)
-          : 999;
-
-        return lastDonation >= 90;
+    const scored = profiles
+      .filter((p) => {
+        const donorInfo = p.donors;
+        if (!donorInfo) return false;
+        // Only show donors with the exact searched blood group
+        if (donorInfo.blood_group !== blood_group) return false;
+        return true;
       })
-      .map((d) => {
-        const profile = d.profiles;
+      .map((p) => {
+        const donorInfo = p.donors;
         const distance = getDistance(
           location_lat,
           location_lng,
-          profile.location_lat,
-          profile.location_lng
+          p.location_lat || 23.8103,
+          p.location_lng || 90.4125
         );
 
         // Scoring system (out of 100)
@@ -69,28 +73,25 @@ if (division && profile.division?.toLowerCase() !== division.toLowerCase()) retu
         const distanceScore = Math.max(0, 30 - distance * 2);
         score += distanceScore;
 
-        // 3. Last donation eligibility (20 pts)
-        const lastDonation = d.last_donation_date
-          ? (Date.now() - new Date(d.last_donation_date).getTime()) / (1000 * 60 * 60 * 24)
-          : 999;
-        const eligibilityScore = lastDonation >= 180 ? 20 : lastDonation >= 90 ? 15 : 0;
-        score += eligibilityScore;
+        // 3. Total donations (20 pts)
+        const donationScore = donorInfo.total_donations >= 10 ? 20 : donorInfo.total_donations >= 5 ? 15 : donorInfo.total_donations >= 1 ? 10 : 0;
+        score += donationScore;
 
         // 4. Availability (10 pts)
-        if (d.is_available) score += 10;
+        if (donorInfo.is_available) score += 10;
 
         return {
-          donor_id: d.id,
-          name: profile.full_name,
-          phone: profile.phone,
-division: profile.division,
-           district: profile.district,
-          blood_group: d.blood_group,
+          donor_id: p.id,
+          name: p.full_name,
+          phone: p.phone,
+          division: p.division,
+          district: p.district,
+          blood_group: donorInfo.blood_group,
           distance_km: distance.toFixed(2),
           score: Math.round(score),
-          is_available: d.is_available,
-          total_donations: d.total_donations,
-          last_donation_date: d.last_donation_date,
+          is_available: donorInfo.is_available,
+          total_donations: donorInfo.total_donations,
+          last_donation_date: donorInfo.last_donation_date,
         };
       })
       .sort((a, b) => b.score - a.score)
