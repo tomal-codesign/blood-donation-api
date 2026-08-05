@@ -15,18 +15,6 @@ function getDistance(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Blood group compatibility matrix
-const compatible = {
-  'O-': ['O-'],
-  'O+': ['O+'],
-  'A-': ['A-'],
-  'A+': ['A+'],
-  'B-': ['B-'],
-  'B+': ['B+'],
-  'AB-': ['AB-'],
-  'AB+': ['AB+'],
-};
-
 // AI Matching Algorithm
 router.post('/match', async (req, res) => {
   try {
@@ -36,24 +24,20 @@ const { blood_group, location_lat, location_lng, division, district, units_neede
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Fetch available donors
+    // Fetch available donors with the exact blood group
     const { data: donors, error } = await supabase
       .from('donors')
 .select('*, profiles:profiles(full_name, phone, division, district, location_lat, location_lng)')
-      .eq('is_available', true);
+      .eq('is_available', true)
+      .eq('blood_group', blood_group);
 
     if (error) return res.status(400).json({ error: error.message });
-
-    // Find compatible blood groups
-    const eligibleGroups = Object.entries(compatible)
-      .filter(([donor_group]) => compatible[donor_group]?.includes(blood_group))
-      .map(([g]) => g);
 
     // Score and rank donors
     const scored = donors
       .filter((d) => {
         const profile = d.profiles;
-        if (!profile || !eligibleGroups.includes(d.blood_group)) return false;
+        if (!profile) return false;
 
         // Restrict to the searched division, and district if one was given
 if (division && profile.division?.toLowerCase() !== division.toLowerCase()) return false;
