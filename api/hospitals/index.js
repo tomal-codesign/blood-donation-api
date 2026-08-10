@@ -67,74 +67,86 @@ router.get('/donation-history/:hospitalId', async (req, res) => {
       return res.status(400).json({ error: 'Hospital ID required' });
     }
 
-    // Get all blood requests created by this hospital (requester_id = hospital's user ID)
+    // Get all fulfilled requests created by this hospital (requester_id = hospital's user ID)
+    // Each fulfilled request has a donor_id set directly on it (FK to profiles.id)
     const { data: requests, error: requestError } = await supabase
       .from('blood_requests')
-      .select('id, requester_id')
+      .select('id, donor_id, blood_group, units_needed, created_at, updated_at')
       .eq('requester_id', hospitalId)
-      .eq('status', 'fulfilled');
+      .eq('status', 'fulfilled')
+      .not('donor_id', 'is', null)
+      .order('updated_at', { ascending: false });
 
     if (requestError) {
       return res.status(400).json({ error: requestError.message });
     }
 
-    const requestIds = requests?.map(r => r.id) || [];
-
-    if (requestIds.length === 0) {
+    if (requests?.length === 0) {
       return res.json({
         success: true,
         history: []
       });
     }
 
-    // Get donation history for these requests
-    const { data: history, error: historyError } = await supabase
-      .from('donation_history')
+    // Get unique donor IDs directly from the fulfilled requests
+    var donorIds = [];
+    var donorSet = {};
+    requests?.forEach(function(r) {
+      if (r.donor_id && !donorSet[r.donor_id]) {
+        donorSet[r.donor_id] = true;
+        donorIds.push(r.donor_id);
+      }
+    });
+
+    // Get donor details (donors.id = profiles.id, so join profiles for contact info)
+    const { data: donors, error: donorsError } = await supabase
+      .from('donors')
       .select(`
         id,
-        donor_id,
-        request_id,
-        donated_at,
-        units,
-        donors:donor_id (
-          id,
-          blood_group,
-          is_available,
-          total_donations,
-          last_donation_date,
-          profiles:profiles!inner (
-            full_name,
-            email,
-            phone,
-            division,
-            district
-          )
+        blood_group,
+        is_available,
+        total_donations,
+        last_donation_date,
+        profiles:profiles!inner (
+          full_name,
+          email,
+          phone,
+          division,
+          district
         )
       `)
-      .in('request_id', requestIds)
-      .order('donated_at', { ascending: false });
+      .in('id', donorIds);
 
-    if (historyError) {
-      return res.status(400).json({ error: historyError.message });
+    if (donorsError) {
+      return res.status(400).json({ error: donorsError.message });
     }
 
-    // Format the response
-    const formattedHistory = history?.map(function(item) {
+    // Build a donor lookup map
+    var donorMap = {};
+    donors?.forEach(function(d) {
+      donorMap[d.id] = d;
+    });
+
+    // Format the response using the fulfilled requests directly
+    const formattedHistory = requests?.map(function(item) {
+      var donor = donorMap[item.donor_id];
       return {
         donor_id: item.donor_id,
-        donated_at: item.donated_at,
-        units: item.units,
+        donated_at: item.updated_at,
+        units: item.units_needed,
+        request_id: item.id,
+        blood_group: item.blood_group,
         donor: {
-          id: item.donors?.id,
-          full_name: item.donors?.profiles?.full_name,
-          email: item.donors?.profiles?.email,
-          phone: item.donors?.profiles?.phone,
-          district: item.donors?.profiles?.district,
-          division: item.donors?.profiles?.division,
-          blood_group: item.donors?.blood_group,
-          is_available: item.donors?.is_available,
-          total_donations: item.donors?.total_donations,
-          last_donation_date: item.donors?.last_donation_date
+          id: donor?.id,
+          full_name: donor?.profiles?.full_name,
+          email: donor?.profiles?.email,
+          phone: donor?.profiles?.phone,
+          district: donor?.profiles?.district,
+          division: donor?.profiles?.division,
+          blood_group: donor?.blood_group,
+          is_available: donor?.is_available,
+          total_donations: donor?.total_donations,
+          last_donation_date: donor?.last_donation_date
         }
       };
     }) || [];
@@ -159,42 +171,25 @@ router.get('/donors/:hospitalId', async (req, res) => {
     }
 
     // Get all fulfilled requests created by this hospital (requester_id = hospital's user ID)
+    // Each fulfilled request has a donor_id set directly on it (FK to profiles.id)
     const { data: requests, error: requestError } = await supabase
       .from('blood_requests')
-      .select('id')
+      .select('id, donor_id')
       .eq('requester_id', hospitalId)
-      .eq('status', 'fulfilled');
+      .eq('status', 'fulfilled')
+      .not('donor_id', 'is', null);
 
     if (requestError) {
       return res.status(400).json({ error: requestError.message });
     }
 
-    const requestIds = requests?.map(function(r) { return r.id; }) || [];
-
-    if (requestIds.length === 0) {
-      return res.json({
-        success: true,
-        donors: []
-      });
-    }
-
-    // Get unique donors from donation history
-    const { data: donations, error: donationError } = await supabase
-      .from('donation_history')
-      .select('donor_id')
-      .in('request_id', requestIds);
-
-    if (donationError) {
-      return res.status(400).json({ error: donationError.message });
-    }
-
-    // Get unique donor IDs
+    // Get unique donor IDs directly from the fulfilled requests
     var donorIds = [];
     var donorSet = {};
-    donations?.forEach(function(d) {
-      if (d.donor_id && !donorSet[d.donor_id]) {
-        donorSet[d.donor_id] = true;
-        donorIds.push(d.donor_id);
+    requests?.forEach(function(r) {
+      if (r.donor_id && !donorSet[r.donor_id]) {
+        donorSet[r.donor_id] = true;
+        donorIds.push(r.donor_id);
       }
     });
 
@@ -205,7 +200,7 @@ router.get('/donors/:hospitalId', async (req, res) => {
       });
     }
 
-    // Get donor details
+    // Get donor details (donors.id = profiles.id, so join profiles for contact info)
     const { data: donors, error: donorsError } = await supabase
       .from('donors')
       .select(`
@@ -228,31 +223,31 @@ router.get('/donors/:hospitalId', async (req, res) => {
       return res.status(400).json({ error: donorsError.message });
     }
 
-    // Count donations per donor
+    // Count donations per donor from the fulfilled requests
     var donationCounts = {};
-    donations?.forEach(function(d) {
-      if (d.donor_id) {
-        donationCounts[d.donor_id] = (donationCounts[d.donor_id] || 0) + 1;
+    requests?.forEach(function(r) {
+      if (r.donor_id) {
+        donationCounts[r.donor_id] = (donationCounts[r.donor_id] || 0) + 1;
       }
     });
 
     // Format the response
-        var formattedDonors = donors?.map(function(d) {
-          return {
-            id: d.id,
-            full_name: d.profiles?.full_name,
-            email: d.profiles?.email,
-            phone: d.profiles?.phone,
-            district: d.profiles?.district,
-            division: d.profiles?.division,
-            blood_group: d.blood_group,
-            is_available: d.is_available,
-            total_donations: d.total_donations,
-            last_donation_date: d.last_donation_date,
-            donation_count: donationCounts[d.id] || 0,
-            donated_to_hospital: true
-          };
-        }) || [];
+    var formattedDonors = donors?.map(function(d) {
+      return {
+        id: d.id,
+        full_name: d.profiles?.full_name,
+        email: d.profiles?.email,
+        phone: d.profiles?.phone,
+        district: d.profiles?.district,
+        division: d.profiles?.division,
+        blood_group: d.blood_group,
+        is_available: d.is_available,
+        total_donations: d.total_donations,
+        last_donation_date: d.last_donation_date,
+        donation_count: donationCounts[d.id] || 0,
+        donated_to_hospital: true
+      };
+    }) || [];
 
     res.json({
       success: true,
