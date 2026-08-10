@@ -498,6 +498,7 @@ router.patch("/:id/status", async (req, res) => {
           .update({
             total_donations: (currentDonor?.total_donations || 0) + 1,
             last_donation_date: new Date().toISOString().split("T")[0],
+            is_available: false,
             updated_at: new Date().toISOString(),
           })
           .eq("id", donatingDonorId);
