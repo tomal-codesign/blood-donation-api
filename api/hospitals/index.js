@@ -189,6 +189,61 @@ router.get('/donation-history/:hospitalId', async (req, res) => {
   }
 });
 
+// GET - Monthly Request Trend for a Hospital
+router.get('/analytics/monthly-trend/:hospitalId', async (req, res) => {
+  try {
+    const { hospitalId } = req.params;
+
+    if (!hospitalId) {
+      return res.status(400).json({ error: 'Hospital ID required' });
+    }
+
+    // Get all requests created by this hospital
+    const { data: requests, error: requestError } = await supabase
+      .from('blood_requests')
+      .select('id, created_at, status')
+      .eq('requester_id', hospitalId)
+      .order('created_at', { ascending: true });
+
+    if (requestError) {
+      return res.status(400).json({ error: requestError.message });
+    }
+
+    // Build monthly trend for last 6 months
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const trend = [];
+    const now = new Date();
+
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+      const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+
+      const monthRequests = requests?.filter(function(r) {
+        const created = new Date(r.created_at);
+        return created >= monthStart && created <= monthEnd;
+      }) || [];
+
+      trend.push({
+        month: monthNames[date.getMonth()],
+        year: date.getFullYear(),
+        total: monthRequests.length,
+        fulfilled: monthRequests.filter(function(r) { return r.status === 'fulfilled'; }).length,
+        pending: monthRequests.filter(function(r) { return r.status === 'pending'; }).length,
+        cancelled: monthRequests.filter(function(r) { return r.status === 'cancelled'; }).length
+      });
+    }
+
+    res.json({
+      success: true,
+      trend
+    });
+  } catch (error) {
+    console.error('Monthly trend error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET - Donors who donated to this hospital
 router.get('/donors/:hospitalId', async (req, res) => {
   try {
