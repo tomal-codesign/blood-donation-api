@@ -67,22 +67,11 @@ router.get('/donation-history/:hospitalId', async (req, res) => {
       return res.status(400).json({ error: 'Hospital ID required' });
     }
 
-    // Get hospital profile to get hospital_name
-    const { data: hospital, error: hospitalError } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', hospitalId)
-      .single();
-
-    if (hospitalError) {
-      return res.status(400).json({ error: hospitalError.message });
-    }
-
-    // Get all blood requests from this hospital
+    // Get all blood requests created by this hospital (requester_id = hospital's user ID)
     const { data: requests, error: requestError } = await supabase
       .from('blood_requests')
       .select('id, requester_id')
-      .eq('hospital_name', hospital.full_name)
+      .eq('requester_id', hospitalId)
       .eq('status', 'fulfilled');
 
     if (requestError) {
@@ -169,22 +158,11 @@ router.get('/donors/:hospitalId', async (req, res) => {
       return res.status(400).json({ error: 'Hospital ID required' });
     }
 
-    // Get hospital profile to get hospital_name
-    const { data: hospital, error: hospitalError } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', hospitalId)
-      .single();
-
-    if (hospitalError) {
-      return res.status(400).json({ error: hospitalError.message });
-    }
-
-    // Get all fulfilled requests from this hospital
+    // Get all fulfilled requests created by this hospital (requester_id = hospital's user ID)
     const { data: requests, error: requestError } = await supabase
       .from('blood_requests')
       .select('id')
-      .eq('hospital_name', hospital.full_name)
+      .eq('requester_id', hospitalId)
       .eq('status', 'fulfilled');
 
     if (requestError) {
