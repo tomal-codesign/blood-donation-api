@@ -1,3 +1,4 @@
+// api/admin/index.js
 const express = require('express');
 const router = express.Router();
 const supabase = require('../../supabase');
@@ -81,7 +82,6 @@ router.get('/donors', async (req, res) => {
           full_name,
           phone,
           email,
-          city,
           division,
           district,
           role,
@@ -103,7 +103,6 @@ router.get('/donors', async (req, res) => {
       full_name: d.profiles?.full_name || 'Unknown',
       phone: d.profiles?.phone || 'N/A',
       email: d.profiles?.email || 'N/A',
-      city: d.profiles?.city || 'N/A',
       division: d.profiles?.division || 'N/A',
       district: d.profiles?.district || 'N/A',
       blood_group: d.blood_group,
