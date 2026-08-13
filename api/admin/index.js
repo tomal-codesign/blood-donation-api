@@ -67,6 +67,63 @@ router.get('/analytics', async (req, res) => {
   }
 });
 
+// Get all donors (profiles + donor details joined)
+router.get('/donors', async (req, res) => {
+  try {
+    const { availability } = req.query;
+
+    let query = supabase
+      .from('donors')
+      .select(`
+        *,
+        profiles:profiles (
+          id,
+          full_name,
+          phone,
+          email,
+          city,
+          division,
+          district,
+          role,
+          created_at
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (availability === 'active') query = query.eq('is_available', true);
+    if (availability === 'inactive') query = query.eq('is_available', false);
+
+    const { data, error } = await query;
+
+    if (error) return res.status(400).json({ error: error.message });
+
+    // Flatten the response
+    const donors = (data || []).map((d) => ({
+      id: d.id,
+      full_name: d.profiles?.full_name || 'Unknown',
+      phone: d.profiles?.phone || 'N/A',
+      email: d.profiles?.email || 'N/A',
+      city: d.profiles?.city || 'N/A',
+      division: d.profiles?.division || 'N/A',
+      district: d.profiles?.district || 'N/A',
+      blood_group: d.blood_group,
+      is_available: d.is_available,
+      last_donation_date: d.last_donation_date,
+      total_donations: d.total_donations || 0,
+      weight: d.weight,
+      medical_conditions: d.medical_conditions || [],
+      created_at: d.created_at,
+    }));
+
+    res.json({
+      total_donors: donors.length,
+      donors,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all users
 router.get('/users', async (req, res) => {
   try {
