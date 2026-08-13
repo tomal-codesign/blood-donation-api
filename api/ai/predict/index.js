@@ -1,3 +1,4 @@
+// api/ai/predict/index.js
 const express = require('express');
 const router = express.Router();
 const supabase = require('../../../supabase');
@@ -55,6 +56,12 @@ router.get('/predict', async (req, res) => {
       })
       .sort((a, b) => a.days_until_shortage - b.days_until_shortage);
 
+    // Calculate accuracy based on stable groups ratio
+    const stableGroups = report.filter((r) => r.status === 'stable').length;
+    const accuracy = report.length > 0 
+      ? Math.round((stableGroups / report.length) * 100) 
+      : 0;
+
     res.json({
       predictions: report,
       generated_at: new Date().toISOString(),
@@ -62,6 +69,8 @@ router.get('/predict', async (req, res) => {
       total_blood_groups_monitored: report.length,
       critical_groups: report.filter((r) => r.status === 'critical').length,
       low_groups: report.filter((r) => r.status === 'low').length,
+      stable_groups: stableGroups,
+      accuracy,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
