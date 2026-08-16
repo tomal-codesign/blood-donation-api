@@ -38,14 +38,7 @@ router.get('/predict', async (req, res) => {
 
     if (previousError) return res.status(400).json({ error: previousError.message });
 
-    // ============ 2. Fetch hospital inventory ============
-    const { data: inventory, error: inventoryError } = await supabase
-      .from('blood_inventory')
-      .select('blood_group, units_available');
-
-    if (inventoryError) return res.status(400).json({ error: inventoryError.message });
-
-    // ============ 3. Aggregate request data per blood group ============
+    // ============ 2. Aggregate request data per blood group ============
     const aggregateRequests = (requests) => {
       const summary = {};
       ALL_BLOOD_GROUPS.forEach((bg) => {
@@ -75,18 +68,10 @@ router.get('/predict', async (req, res) => {
     const currentSummary = aggregateRequests(currentRequests);
     const previousSummary = aggregateRequests(previousRequests);
 
-    // ============ 4. Aggregate inventory per blood group ============
-    const inventoryByGroup = {};
-    inventory?.forEach((item) => {
-      inventoryByGroup[item.blood_group] =
-        (inventoryByGroup[item.blood_group] || 0) + (item.units_available || 0);
-    });
-
-    // ============ 5. Build the prediction report ============
+    // ============ 3. Build the prediction report ============
     const report = ALL_BLOOD_GROUPS.map((bloodGroup) => {
       const current = currentSummary[bloodGroup];
       const previous = previousSummary[bloodGroup];
-      const unitsAvailable = inventoryByGroup[bloodGroup] || 0;
 
       // Trend: change vs previous period
       const trendChange = previous.request_count > 0
@@ -98,11 +83,11 @@ router.get('/predict', async (req, res) => {
       const projectedRequestCount = Math.round(current.request_count * growthFactor);
       const projectedUnitsNeeded = Math.round(current.total_units_needed * growthFactor);
 
-      // Status based on demand level
+      // Status based on demand level only
       let status = 'stable';
-      if (current.critical_requests > 0 || (current.request_count > 0 && unitsAvailable === 0)) {
+      if (current.critical_requests > 0) {
         status = 'critical';
-      } else if (current.request_count > 10 || (current.total_units_needed > unitsAvailable && unitsAvailable > 0)) {
+      } else if (current.request_count > 10) {
         status = 'low';
       }
 
@@ -121,12 +106,12 @@ router.get('/predict', async (req, res) => {
       // Recommendation message
       const recommendation =
         current.request_count === 0
-          ? `✅ No blood requests for ${bloodGroup} in the last 30 days.`
+          ? `No blood requests for ${bloodGroup} in the last 30 days.`
           : status === 'critical'
-          ? `🔴 CRITICAL: ${bloodGroup} has ${current.critical_requests} urgent request(s). Stock: ${unitsAvailable} units. Immediate action needed!`
+          ? `CRITICAL: ${bloodGroup} has ${current.critical_requests} urgent request(s) (${current.total_units_needed} units). Immediate action needed!`
           : status === 'low'
-          ? `🟡 CAUTION: ${bloodGroup} demand (${current.request_count} requests, ${current.total_units_needed} units) exceeds available stock (${unitsAvailable}). Monitor closely.`
-          : `✅ ${bloodGroup} demand is manageable. ${current.request_count} requests, ${current.total_units_needed} units needed vs ${unitsAvailable} units available.`;
+          ? `CAUTION: ${bloodGroup} demand is high (${current.request_count} requests, ${current.total_units_needed} units). Monitor closely.`
+          : `${bloodGroup} demand is manageable. ${current.request_count} requests, ${current.total_units_needed} units needed.`;
 
       return {
         blood_group: bloodGroup,
@@ -147,15 +132,13 @@ router.get('/predict', async (req, res) => {
         trend_change_pct: trendChange,
         projected_request_count: projectedRequestCount,
         projected_units_needed: projectedUnitsNeeded,
-        // Inventory
-        units_available: unitsAvailable,
         demand_level: demandLevel,
         status,
         recommendation,
       };
     });
 
-    // ============ 6. Aggregate stats ============
+    // ============ 4. Aggregate stats ============
     const totalCurrentRequests = report.reduce((s, r) => s + r.current_period.request_count, 0);
     const totalProjectedRequests = report.reduce((s, r) => s + r.projected_request_count, 0);
     const totalUnitsNeeded = report.reduce((s, r) => s + r.current_period.total_units_needed, 0);
