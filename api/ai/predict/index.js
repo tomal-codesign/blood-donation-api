@@ -5,7 +5,7 @@ const supabase = require('../../../supabase');
 
 router.get('/predict', async (req, res) => {
   try {
-    // Get inventory levels
+    // Get inventory levels (may have multiple rows per blood group)
     const { data: inventory, error: inventoryError } = await supabase
       .from('blood_inventory')
       .select('blood_group, units_available');
@@ -27,13 +27,20 @@ router.get('/predict', async (req, res) => {
       demand[r.blood_group] = (demand[r.blood_group] || 0) + 1;
     });
 
-    // Build prediction report
-    const report = inventory
-      ?.map((item) => {
-        const monthlyDemand = demand[item.blood_group] || 0;
+    // Aggregate inventory by blood group (sum all units for each group)
+    const inventoryByGroup = {};
+    inventory?.forEach((item) => {
+      inventoryByGroup[item.blood_group] =
+        (inventoryByGroup[item.blood_group] || 0) + (item.units_available || 0);
+    });
+
+    // Build prediction report — one entry per blood group (no duplicates)
+    const report = Object.entries(inventoryByGroup)
+      .map(([bloodGroup, unitsAvailable]) => {
+        const monthlyDemand = demand[bloodGroup] || 0;
         const daysLeft =
           monthlyDemand > 0
-            ? Math.round((item.units_available / monthlyDemand) * 30)
+            ? Math.round((unitsAvailable / monthlyDemand) * 30)
             : 999;
 
         let status = 'stable';
@@ -41,17 +48,17 @@ router.get('/predict', async (req, res) => {
         else if (daysLeft < 15) status = 'low';
 
         return {
-          blood_group: item.blood_group,
-          units_available: item.units_available,
+          blood_group: bloodGroup,
+          units_available: unitsAvailable,
           monthly_demand: monthlyDemand,
           days_until_shortage: daysLeft,
           status,
           recommendation:
             daysLeft < 15
-              ? `🔴 URGENT: Run donation campaign for ${item.blood_group}`
+              ? `🔴 URGENT: Run donation campaign for ${bloodGroup}`
               : daysLeft < 30
-              ? `🟡 CAUTION: Monitor ${item.blood_group} levels`
-              : `✅ Stock for ${item.blood_group} is sufficient`,
+              ? `🟡 CAUTION: Monitor ${bloodGroup} levels`
+              : `✅ Stock for ${bloodGroup} is sufficient`,
         };
       })
       .sort((a, b) => a.days_until_shortage - b.days_until_shortage);
